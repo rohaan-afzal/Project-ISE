@@ -108,3 +108,4 @@ qrc_*.cpp
 .qtcreator/
 # Locally built OpenCV dependency
 /deps/
+.cmake/
