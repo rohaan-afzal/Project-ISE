@@ -4,7 +4,7 @@
 
 #include <string>
 #include <vector>
-#include "ImageProcessor.h"
+#include "../ImageProcessor/ImageProcessor.h"
 
 using namespace std;
 class Decoder {
