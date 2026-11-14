@@ -216,7 +216,8 @@ void MainWindow::onGenerateClicked()
     try
     {
         std::string bits = Encoder::encode(text.toStdString());
-
+        qDebug() << "bits:" << bits.length() << QString::fromStdString(bits);
+        qDebug() << "round trip:" << QString::fromStdString(Decoder::decodeBinary(bits));
         BarcodeImageGenerator generator;
 
         m_currentImage = generator.generate(bits);
@@ -343,7 +344,11 @@ void MainWindow::onUploadClicked()
         }
 
         int baseModuleWidth = runs[0].pixelLength;
-
+        // Strip white quiet zones so the first run is the black start bar
+        if (!runs.empty() && !runs.front().isBlack) runs.erase(runs.begin());
+        if (!runs.empty() && !runs.back().isBlack)  runs.pop_back();
+        if (runs.empty())
+            throw std::runtime_error("No barcode bars found in the image.");
         for (size_t i = 1; i < runs.size(); i++)
         {
             if (runs[i].pixelLength < baseModuleWidth)
@@ -356,7 +361,6 @@ void MainWindow::onUploadClicked()
             runs,
             baseModuleWidth
             );
-
         std::string decodedNumber = Decoder::decodeRuns(
             runs,
             moduleCounts
