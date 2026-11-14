@@ -4,7 +4,7 @@
 #include "Encoder/Encoder.h"
 #include "BarcodeImageGenerator.h"
 #include "../Backend/Decoder/Decoder.h"
-#include "ImageProcessor.h"
+#include "../Backend/ImageProcessor/ImageProcessor.h"
 
 #include <QTabWidget>
 #include <QLabel>
