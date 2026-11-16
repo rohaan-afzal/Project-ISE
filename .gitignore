@@ -106,3 +106,6 @@ qrc_*.cpp
 
 # Qt Creator local settings
 .qtcreator/
+# Locally built OpenCV dependency
+/deps/
+.cmake/

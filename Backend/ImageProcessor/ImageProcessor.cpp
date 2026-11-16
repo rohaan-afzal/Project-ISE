@@ -89,7 +89,6 @@ vector<int> ImageProcessor::scanHorizontalLine(const cv::Mat& binImg, int y) con
     return linePixels;
 }
 
-
 vector<ColorRun> ImageProcessor::measureRuns(const vector<int>& scanLinePixels) const
 {
     if (scanLinePixels.empty())
@@ -97,30 +96,11 @@ vector<ColorRun> ImageProcessor::measureRuns(const vector<int>& scanLinePixels) 
         return {};
     }
 
-    int start = 0;
-    int end = static_cast<int>(scanLinePixels.size()) - 1;
-
-    while (start <= end && scanLinePixels[start] == 255)
-    {
-        start++;
-    }
-
-    while (end >= start && scanLinePixels[end] == 255)
-    {
-        end--;
-    }
-
-    if (start > end)
-    {
-        return {};
-    }
-
     vector<ColorRun> runs;
-
-    bool currentIsBlack = (scanLinePixels[start] == 0);
+    bool currentIsBlack = (scanLinePixels[0] == 0);
     int currentLength = 1;
 
-    for (int i = start + 1; i <= end; i++)
+    for (size_t i = 1; i < scanLinePixels.size(); i++)
     {
         bool isBlack = (scanLinePixels[i] == 0);
 
@@ -135,13 +115,10 @@ vector<ColorRun> ImageProcessor::measureRuns(const vector<int>& scanLinePixels) 
             currentLength = 1;
         }
     }
-
     runs.push_back({ currentIsBlack, currentLength, 0 });
 
     return runs;
 }
-
-
 
 vector<int> ImageProcessor::normalizeRuns(const vector<ColorRun>& runs, int baseModuleWidth) const
 {
@@ -155,21 +132,12 @@ vector<int> ImageProcessor::normalizeRuns(const vector<ColorRun>& runs, int base
 
     for (const auto& run : runs)
     {
-        int modules = static_cast<int>(
-            round(static_cast<double>(run.pixelLength) / baseModuleWidth)
-            );
-
-        if (modules < 1)
-        {
-            throw invalid_argument("Invalid barcode run width.");
-        }
-
-        moduleCounts.push_back(modules);
+        int modules = static_cast<int>(round(static_cast<double>(run.pixelLength) / baseModuleWidth));
+        moduleCounts.push_back(max(1, modules));
     }
 
     return moduleCounts;
 }
-
 
 QImage ImageProcessor::matToQImage(const cv::Mat& mat)
 {
