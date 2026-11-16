@@ -2,8 +2,11 @@ cmake_minimum_required(VERSION 3.19)
 project(increment111 LANGUAGES CXX)
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets)
-find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs)
-qt_standard_project_setup()
+
+set(OpenCV_DIR "C:/Users/HADI/Downloads/opencv/build")
+find_package(OpenCV REQUIRED)
+
+set(CMAKE_AUTOMOC ON)
 
 qt_add_executable(increment111
     WIN32 MACOSX_BUNDLE
@@ -18,6 +21,15 @@ qt_add_executable(increment111
     Backend/Decoder.cpp
     Backend/ImageProcessor.h
     Backend/ImageProcessor.cpp
+    Backend/ProductRepository.cpp
+    Backend/ProductService.cpp
+    Backend/ProductDescriptionView.cpp
+    Backend/ProductLookupController.cpp
+    Backend/Product.h
+    Backend/ProductRepository.h
+    Backend/ProductService.h
+    Backend/ProductDescriptionView.h
+    Backend/ProductLookupController.h
 )
 
 target_link_libraries(increment111
