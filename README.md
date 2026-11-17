@@ -6,3 +6,13 @@ This project is a C++ desktop application developed as part of our Information S
 The application converts six-digit numeric inputs into barcode patterns, generates barcode images, processes barcode images to extract binary data, and decodes the extracted patterns back into their original numeric values. A Qt-based graphical user interface provides interaction with the system.
 
 The project is divided into independent modules developed by five team members and integrated into a single application.
+
+## Camera barcode scanning
+
+Camera capture uses OpenCV `videoio` (`VideoCapture`); retail EAN/UPC decoding uses OpenCV `objdetect`. The bundled OpenCV build must include both modules. If either module is missing, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build-opencv-videoio.ps1
+```
+
+Then reconfigure and rebuild the Qt Creator project. The Read screen scans continuously until a barcode is decoded; click **Cancel scan** to stop it.

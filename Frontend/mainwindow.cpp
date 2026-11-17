@@ -5,6 +5,8 @@
 #include "BarcodeImageGenerator.h"
 #include "../Backend/Decoder/Decoder.h"
 #include "../Backend/ImageProcessor/ImageProcessor.h"
+#include "../Backend/BarcodeReader/CameraBarcodeReader.h"
+#include "../Backend/Product/ProductService.h"
 
 #include <QTabWidget>
 #include <QLabel>
@@ -19,13 +21,23 @@
 #include <QMessageBox>
 #include <QFrame>
 #include <QFont>
+#include <QCoreApplication>
+#include <QApplication>
+#include <QDir>
+#include <QFileInfo>
+#include <QMetaObject>
 
 #include <stdexcept>
 #include <string>
 #include <vector>
 
-MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
+MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
+    m_barcodeReader(std::make_unique<CameraBarcodeReader>()), m_scanning(false), m_cancelScan(false)
 {
+    const QString appDir = QCoreApplication::applicationDirPath();
+    QString catalogPath = QDir::current().filePath("Data/Product.txt");
+    if (!QFileInfo::exists(catalogPath)) catalogPath = QDir(appDir).filePath("../Data/Product.txt");
+    m_productService = std::make_unique<ProductService>(catalogPath.toStdString());
     setWindowTitle("Barcode Generator & Reader");
     resize(700, 500);
 
@@ -106,6 +118,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     )");
 }
 
+MainWindow::~MainWindow()
+{
+    m_cancelScan = true;
+    if (m_scanThread.joinable()) m_scanThread.join();
+}
+
 QWidget* MainWindow::createGenerateTab()
 {
     QWidget* page = new QWidget;
@@ -177,8 +195,15 @@ QWidget* MainWindow::createReadTab()
     QWidget* page = new QWidget;
     QVBoxLayout* layout = new QVBoxLayout(page);
 
+    QHBoxLayout* actions = new QHBoxLayout;
+    m_cameraBtn = new QPushButton("Scan with Camera");
     m_uploadBtn = new QPushButton("Upload Barcode Image");
-    layout->addWidget(m_uploadBtn);
+    m_descriptionBtn = new QPushButton("Description");
+    m_descriptionBtn->setEnabled(false);
+    actions->addWidget(m_cameraBtn);
+    actions->addWidget(m_uploadBtn);
+    actions->addWidget(m_descriptionBtn);
+    layout->addLayout(actions);
 
     m_readPreview = new QLabel("Uploaded barcode will appear here");
     m_readPreview->setAlignment(Qt::AlignCenter);
@@ -199,12 +224,19 @@ QWidget* MainWindow::createReadTab()
     m_readStatus = new QLabel;
     layout->addWidget(m_readStatus);
 
+    m_productDetails = new QLabel("Scan a product barcode to view its description.");
+    m_productDetails->setWordWrap(true);
+    m_productDetails->setFrameShape(QFrame::StyledPanel);
+    layout->addWidget(m_productDetails);
+
     connect(
         m_uploadBtn,
         &QPushButton::clicked,
         this,
         &MainWindow::onUploadClicked
         );
+    connect(m_cameraBtn, &QPushButton::clicked, this, &MainWindow::onCameraClicked);
+    connect(m_descriptionBtn, &QPushButton::clicked, this, &MainWindow::onDescriptionClicked);
 
     return page;
 }
@@ -313,58 +345,9 @@ void MainWindow::onUploadClicked()
 
     try
     {
-        ImageProcessor processor;
-
-        if (!processor.loadImage(path.toStdString()))
-        {
-            throw std::runtime_error(
-                "Could not process the uploaded image."
-                );
-        }
-
-        cv::Mat original = processor.getCurrentImage();
-
-        cv::Mat gray = processor.convertToGrayscale(original);
-
-        cv::Mat binary = processor.applyThreshold(
-            gray,
-            processor.getThreshold()
-            );
-
-        std::vector<int> pixels = processor.scanHorizontalLine(
-            binary,
-            binary.rows / 2
-            );
-
-        std::vector<ColorRun> runs = processor.measureRuns(pixels);
-
-        if (runs.empty())
-        {
-            throw std::runtime_error("No barcode detected.");
-        }
-
-        int baseModuleWidth = runs[0].pixelLength;
-        // Strip white quiet zones so the first run is the black start bar
-        if (!runs.empty() && !runs.front().isBlack) runs.erase(runs.begin());
-        if (!runs.empty() && !runs.back().isBlack)  runs.pop_back();
-        if (runs.empty())
-            throw std::runtime_error("No barcode bars found in the image.");
-        for (size_t i = 1; i < runs.size(); i++)
-        {
-            if (runs[i].pixelLength < baseModuleWidth)
-            {
-                baseModuleWidth = runs[i].pixelLength;
-            }
-        }
-
-        std::vector<int> moduleCounts = processor.normalizeRuns(
-            runs,
-            baseModuleWidth
-            );
-        std::string decodedNumber = Decoder::decodeRuns(
-            runs,
-            moduleCounts
-            );
+        cv::Mat image = cv::imread(path.toStdString(), cv::IMREAD_COLOR);
+        if (image.empty()) throw std::runtime_error("Could not process the uploaded image.");
+        const std::string decodedNumber = m_barcodeReader->read(image);
 
         m_decodedLabel->setText(
             "Decoded number: " +
@@ -373,6 +356,7 @@ void MainWindow::onUploadClicked()
 
         m_readStatus->setStyleSheet("color: green;");
         m_readStatus->setText("Barcode decoded successfully.");
+        showProductForBarcode(QString::fromStdString(decodedNumber));
     }
     catch (const std::exception& e)
     {
@@ -380,5 +364,85 @@ void MainWindow::onUploadClicked()
 
         m_readStatus->setStyleSheet("color: red;");
         m_readStatus->setText(QString::fromStdString(e.what()));
+    }
+}
+
+void MainWindow::onCameraClicked()
+{
+    if (m_scanning) {
+        m_cancelScan = true;
+        m_cameraBtn->setText("Cancelling…");
+        return;
+    }
+    m_scanning = true;
+    m_cancelScan = false;
+    m_cameraBtn->setText("Cancel scan");
+    m_cameraBtn->setEnabled(true);
+    m_uploadBtn->setEnabled(false);
+    m_readStatus->setStyleSheet("color: black;");
+    m_readStatus->setText("Scanning continuously. Hold the barcode in view or cancel.");
+    if (m_scanThread.joinable()) m_scanThread.join();
+    m_scanThread = std::thread([this] {
+        QString result;
+        QString error;
+        try {
+            const std::string code = m_barcodeReader->readFromCamera(
+                [this](const cv::Mat& frame) {
+                    // Convert on the worker and queue only the finished image for UI rendering.
+                    const QImage preview = ImageProcessor::matToQImage(frame).copy();
+                    QMetaObject::invokeMethod(this, [this, preview] {
+                        m_readPreview->setPixmap(QPixmap::fromImage(preview).scaled(
+                            m_readPreview->size(), Qt::KeepAspectRatio, Qt::FastTransformation));
+                    }, Qt::QueuedConnection);
+                },
+                [this] { return m_cancelScan.load(); });
+            result = QString::fromStdString(code);
+        } catch (const std::exception& e) {
+            error = QString::fromUtf8(e.what());
+        }
+
+        QMetaObject::invokeMethod(this, [this, result, error] {
+            if (!result.isEmpty()) {
+                m_decodedLabel->setText("Decoded number: " + result);
+                m_readStatus->setStyleSheet("color: green;");
+                m_readStatus->setText("Barcode decoded from camera.");
+                showProductForBarcode(result);
+            } else {
+                const bool cancelled = m_cancelScan.load();
+                m_decodedLabel->setText("Decoded number: -");
+                m_readStatus->setStyleSheet(cancelled ? "color: black;" : "color: red;");
+                m_readStatus->setText(cancelled ? "Barcode scan cancelled." : error);
+            }
+            m_scanning = false;
+            m_cameraBtn->setText("Scan with Camera");
+            m_cameraBtn->setEnabled(true);
+            m_uploadBtn->setEnabled(true);
+            if (m_scanThread.joinable()) m_scanThread.join();
+        }, Qt::QueuedConnection);
+    });
+}
+
+void MainWindow::showProductForBarcode(const QString& barcode)
+{
+    m_scannedBarcode = barcode;
+    m_descriptionBtn->setEnabled(true);
+    onDescriptionClicked();
+}
+
+void MainWindow::onDescriptionClicked()
+{
+    if (m_scannedBarcode.isEmpty()) return;
+    try {
+        const auto product = m_productService->findByBarcode(m_scannedBarcode.toStdString());
+        if (!product) {
+            m_productDetails->setText("No product found for barcode " + m_scannedBarcode + ".");
+            return;
+        }
+        m_productDetails->setText(
+            "<b>" + QString::fromStdString(product->name).toHtmlEscaped() + "</b><br>" +
+            QString::fromStdString(product->description).toHtmlEscaped() + "<br><b>Specifications:</b> " +
+            QString::fromStdString(product->specifications).toHtmlEscaped());
+    } catch (const std::exception& e) {
+        m_productDetails->setText("Product lookup failed: " + QString::fromUtf8(e.what()));
     }
 }
