@@ -9,7 +9,16 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets)
 if(NOT OpenCV_DIR AND DEFINED ENV{OpenCV_DIR})
     set(OpenCV_DIR "$ENV{OpenCV_DIR}")
 endif()
-find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs videoio objdetect calib3d features2d flann)
+
+# Qt's MinGW kits cannot link against OpenCV's MSVC (vcXX) libraries. If a
+# stale Qt Creator cache points at an MSVC package, prefer this project's
+# bundled MinGW build when it is available.
+if(MINGW AND OpenCV_DIR MATCHES "/vc[0-9]+/" AND
+   EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/opencv-install/OpenCVConfig.cmake")
+    set(OpenCV_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/opencv-install" CACHE PATH
+        "OpenCV package compatible with the selected MinGW compiler" FORCE)
+endif()
+find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs videoio objdetect)
 
 qt_standard_project_setup()
 

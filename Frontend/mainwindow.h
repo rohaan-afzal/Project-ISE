@@ -6,7 +6,7 @@
 #include <atomic>
 #include <memory>
 #include <thread>
-
+//Forward Declartion
 class QTabWidget;
 class QLineEdit;
 class QLabel;
