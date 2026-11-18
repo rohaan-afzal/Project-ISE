@@ -24,3 +24,14 @@ string BillFileParser::formatLine(const Bill& bill, const BillLine& line)
 
     return RecordFormat::joinFields(fields);
 }
+
+vector<string> BillFileParser::format(const Bill& bill){
+    vector<string> lines;
+
+    for (int i = 0; i < (int)bill.lines.size(); i++)
+    {
+        lines.push_back(formatLine(bill, bill.lines[i]));
+    }
+
+    return lines;
+}
