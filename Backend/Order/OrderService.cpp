@@ -230,7 +230,14 @@ Bill OrderService::checkoutAndGenerateBill(const std::string& paymentMode,
     orderRepository.saveOrder(currentOrder);
     detailRepository.saveOrderDetails(currentOrder.orderID, currentOrder.items);
     billService.saveBill(bill);
-
+    for (const auto& item : currentOrder.items)
+    {
+        if (!productService.deductStock(item.product.barcode, item.quantity))
+        {
+            throw std::runtime_error("Bill saved, but failed to update stock for barcode: " +
+                                     item.product.barcode);
+        }
+    }
     startNewOrder();
     return bill;
 }
