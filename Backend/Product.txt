@@ -1,3 +1,0 @@
-101 123456 MLK Milk Litre 250 5 0 40 # milk.png
-102 234567 BRD Bread Pack 180 0 0 25 # bread.png
-103 345678 SGR Sugar Kg 160 0 5 50 # sugar.png

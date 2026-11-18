@@ -17,8 +17,10 @@ public:
     bool getProductByBarcode(const std::string& barcode, Product& product) const;
     bool getProductByID(const std::string& productID, Product& product) const;
     bool addProduct(const Product& product) const;
+    bool saveAllProducts(const std::vector<Product>& products) const;
+    bool updateStock(const std::string& barcode, int newQuantity) const;
+    bool removeProduct(const std::string& barcode) const;
     std::vector<Product> getAllProducts() const;
 };
 
 #endif
-

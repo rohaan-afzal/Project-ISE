@@ -1,40 +1,42 @@
-#ifndef BILLREPO_H
-#define BILLREPO_H
+#pragma once
+#ifndef BILLCALC_H
+#define BILLCALC_H
 
 #include <string>
 #include <vector>
 #include "Bill.h"
-using namespace std;
+#include "BillRepo.h"
 
-class BillFileParser{
-private:
-    static int fieldCount;
-
-    static string formatLine(const Bill& bill, const BillLine& line);
-    static bool parseLine(const string& line, Bill& bill);
-    static int findBillIndex(const vector<Bill>& bills, const string& billID);
-
+class PricingService
+{
 public:
-    static vector<string> format(const Bill& bill);
-    static vector<Bill> parseAll(const vector<string>& lines);
+    static double roundMoney(double value);
+    static double getLineSubtotal(const BillLine& line);
+    static double getLineTax(const BillLine& line);
+    static double getLineDiscount(const BillLine& line);
+    static double getLineTotal(const BillLine& line);
+
+    static double getTotalWithoutTax(const std::vector<BillLine>& lines);
+    static double getTotalTax(const std::vector<BillLine>& lines);
+    static double getTotalDiscount(const std::vector<BillLine>& lines);
+    static double getTotalPayable(const std::vector<BillLine>& lines);
 };
 
-class BillRepository{
-public:
-    virtual ~BillRepository() {}
-
-    virtual vector<Bill> getAllBills() const = 0;
-    virtual void saveBill(const Bill& bill) = 0;
-};
-
-class FileBillRepository : public BillRepository{
+class BillService
+{
 private:
-    string filePath;
+    BillRepository& repository;
 
 public:
-    explicit FileBillRepository(const string& filePath = "Bill.txt");
+    explicit BillService(BillRepository& repository);
 
-    vector<Bill> getAllBills() const;
+    static bool isValidStatus(const std::string& status);
+    static void validateInput(const std::string& customerName, const std::string& orderID,
+                              const std::string& paymentStatus, const std::vector<BillLine>& lines);
+
+    std::string getNextBillID() const;
+    Bill createBill(const std::string& customerName, const std::string& orderID,
+                    const std::string& paymentStatus, const std::vector<BillLine>& lines) const;
     void saveBill(const Bill& bill);
 };
 

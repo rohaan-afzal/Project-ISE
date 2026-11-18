@@ -1,26 +1,107 @@
 #include "ProductService.h"
-#include <fstream>
-#include <stdexcept>
+#include "../Order/Input-Validator.h"
 
-ProductService::ProductService(std::string catalogPath) : m_catalogPath(std::move(catalogPath)) {}
+ProductService::ProductService(const std::string& productFilePath)
+    : repository(productFilePath)
+{
+}
 
-std::optional<Product> ProductService::findByBarcode(const std::string& barcode) const {
-    std::ifstream input(m_catalogPath);
-    if (!input) throw std::runtime_error("Could not open the product catalog: " + m_catalogPath);
-    std::string line;
-    while (std::getline(input, line)) {
-        if (line.empty() || line[0] == '#') continue;
-        Product product;
-        const auto first = line.find('|');
-        const auto second = first == std::string::npos ? first : line.find('|', first + 1);
-        const auto third = second == std::string::npos ? second : line.find('|', second + 1);
-        if (first == std::string::npos || second == std::string::npos || third == std::string::npos)
-            continue;
-        product.barcode = line.substr(0, first);
-        product.name = line.substr(first + 1, second - first - 1);
-        product.description = line.substr(second + 1, third - second - 1);
-        product.specifications = line.substr(third + 1);
-        if (product.barcode == barcode) return product;
+bool ProductService::getProductByBarcode(const std::string& barcode, Product& product) const
+{
+    if (!InputValidator::isValidBarcode(barcode))
+        return false;
+    return repository.getProductByBarcode(barcode, product);
+}
+
+bool ProductService::getProductByID(const std::string& productID, Product& product) const
+{
+    if (!InputValidator::isValidID(productID))
+        return false;
+    return repository.getProductByID(productID, product);
+}
+
+bool ProductService::addProduct(const Product& product) const
+{
+    if (!InputValidator::isValidID(product.productID))
+        return false;
+    if (!InputValidator::isValidBarcode(product.barcode))
+        return false;
+    if (product.acronym.empty() || product.name.empty())
+        return false;
+    if (!InputValidator::isValidUnit(product.unit))
+        return false;
+    if (product.unitPrice < 0.0 || product.tax < 0.0 || product.discount < 0.0)
+        return false;
+    if (product.discount > product.unitPrice)
+        return false;
+    if (product.quantity < 0)
+        return false;
+
+    Product existing;
+    if (repository.getProductByID(product.productID, existing))
+        return false;
+    if (repository.getProductByBarcode(product.barcode, existing))
+        return false;
+
+    return repository.addProduct(product);
+}
+
+bool ProductService::deductStock(const std::string& barcode, int soldQuantity) const
+{
+    if (soldQuantity <= 0)
+        return false;
+
+    Product existing;
+    if (!repository.getProductByBarcode(barcode, existing))
+        return false;
+
+    if (existing.quantity < soldQuantity)
+        return false;
+
+    return repository.updateStock(barcode, existing.quantity - soldQuantity);
+}
+
+bool ProductService::restockProduct(const std::string& barcode, int addedQuantity) const
+{
+    if (addedQuantity <= 0)
+        return false;
+
+    Product existing;
+    if (!repository.getProductByBarcode(barcode, existing))
+        return false;
+
+    return repository.updateStock(barcode, existing.quantity + addedQuantity);
+}
+
+bool ProductService::removeProduct(const std::string& barcode) const
+{
+    if (barcode.empty())
+        return false;
+
+    return repository.removeProduct(barcode);
+}
+
+std::vector<Product> ProductService::getAllProducts() const
+{
+    return repository.getAllProducts();
+}
+
+std::string ProductService::getNextProductID() const
+{
+    int highest = 1000;
+    const std::vector<Product> products = repository.getAllProducts();
+    for (const auto& p : products)
+    {
+        try
+        {
+            std::size_t pos = 0;
+            int id = std::stoi(p.productID, &pos);
+            if (pos == p.productID.size() && id > highest)
+                highest = id;
+        }
+        catch (...)
+        {
+        }
     }
-    return std::nullopt;
+    return std::to_string(highest + 1);
 }

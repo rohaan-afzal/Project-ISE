@@ -1,20 +1,26 @@
-
 #pragma once
 
 #include <QMainWindow>
 #include <QImage>
+#include <QString>
 #include <atomic>
 #include <memory>
 #include <thread>
-//Forward Declartion
+
+// Forward Declarations
 class QTabWidget;
 class QLineEdit;
 class QLabel;
 class QPushButton;
 class QWidget;
-class QTimer;
 class ProductService;
-class CameraBarcodeReader;
+class OrderRepository;
+class OrderDetailRepository;
+class FileBillRepository;
+class BillService;
+class OrderService;
+class CashierScreen;
+class ManagerScreen;
 
 class MainWindow : public QMainWindow
 {
@@ -41,20 +47,31 @@ private:
     QPushButton* m_cameraBtn;
     QPushButton* m_descriptionBtn;
     QString m_scannedBarcode;
+
+    // Backend Services & Repositories
+    QString m_dataDirPath;
     std::unique_ptr<ProductService> m_productService;
-    std::unique_ptr<CameraBarcodeReader> m_barcodeReader;
+    std::unique_ptr<OrderRepository> m_orderRepository;
+    std::unique_ptr<OrderDetailRepository> m_orderDetailRepository;
+    std::unique_ptr<FileBillRepository> m_billRepository;
+    std::unique_ptr<BillService> m_billService;
+    std::unique_ptr<OrderService> m_orderService;
+
+    // POS Screens
+    CashierScreen* m_cashierScreen;
+    ManagerScreen* m_managerScreen;
+
     bool m_scanning;
     std::atomic_bool m_cancelScan;
     std::thread m_scanThread;
 
+    QString resolveDataDirectory() const;
     QWidget* createGenerateTab();
     QWidget* createReadTab();
 
 private slots:
+
+    void onTabChanged(int index);
     void onGenerateClicked();
     void onSaveClicked();
-    void onUploadClicked();
-    void onCameraClicked();
-    void onDescriptionClicked();
-    void showProductForBarcode(const QString& barcode);
 };

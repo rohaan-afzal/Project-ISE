@@ -1,5 +1,5 @@
 #include "BillCalc.h"
-#include "RecordFormat.h"
+#include "Record-Format.h"
 #include <cmath>
 #include <stdexcept>
 using namespace std;

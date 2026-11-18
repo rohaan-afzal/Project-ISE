@@ -1,0 +1,9 @@
+ORD-1001 2026-11-19 00:48:09 Walk-in\sCustomer - paid cash 255 Cash\sCounter #
+ORD-1002 2026-11-19 01:02:18 Walk-in\sCustomer - paid wallet 321 jazz\scash #
+ORD-1003 2026-11-19 01:03:09 Walk-in\sCustomer - paid wallet 576 cash\sjazz #
+ORD-1004 2026-11-19 01:11:58 Walk-in\sCustomer - paid cash 5610 Cash\sCounter #
+ORD-1005 2026-11-19 02:38:04 Walk - paid wallet 566 SadaPay #
+ORD-1006 2026-11-19 02:39:23 Walk - paid cash 3962 Cash\sCounter #
+ORD-1007 2026-11-19 02:43:48 Ali - paid cash 2264 Cash\sCounter #
+ORD-1008 2026-11-19 02:49:40 Walk - paid cash 2830 Cash\sCounter #
+ORD-1009 2026-11-19 02:50:27 Walk - paid cash 566 Cash\sCounter #

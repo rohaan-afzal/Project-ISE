@@ -17,18 +17,18 @@
 namespace {
 std::string decodeScanline(const cv::Mat& row) {
     std::vector<ColorRun> runs;
-    if (row.empty()) 
+    if (row.empty())
         throw std::runtime_error("Empty scan line.");
     bool black = row.at<unsigned char>(0, 0) < 128;
     int length = 1;
     for (int x = 1; x < row.cols; ++x) {
         const bool nextBlack = row.at<unsigned char>(0, x) < 128;
-        if (nextBlack == black) 
+        if (nextBlack == black)
             ++length;
-        else { 
-            runs.push_back({black, length, 0}); 
-            black = nextBlack; 
-            length = 1; 
+        else {
+            runs.push_back({black, length, 0});
+            black = nextBlack;
+            length = 1;
         }
     }
     runs.push_back({black, length, 0});
@@ -40,16 +40,16 @@ std::string decodeScanline(const cv::Mat& row) {
         {{2, 1, 1, 2, 1, 4}}, // Code 128 B
         {{2, 1, 1, 2, 3, 2}}  // Code 128 C
     }};
-    if (runs.size() < 6) 
+    if (runs.size() < 6)
         throw std::runtime_error("No barcode found in this scan line.");
     std::vector<int> runOffsets(runs.size(), 0);
     for (size_t i = 1; i < runs.size(); ++i)
         runOffsets[i] = runOffsets[i - 1] + runs[i - 1].pixelLength;
     for (size_t start = 0; start + 6 <= runs.size(); ++start) {
         const int runStartX = runOffsets[start];
-        if (runs.size() - start < 25) 
+        if (runs.size() - start < 25)
             continue;
-        if (!runs[start].isBlack || runs[start + 1].isBlack) 
+        if (!runs[start].isBlack || runs[start + 1].isBlack)
             continue;
         for (const auto& startWidths : startPatterns) {
             double numerator = 0.0;
@@ -84,10 +84,10 @@ std::string decodeScanline(const cv::Mat& row) {
                             }
                             bits.push_back(row.at<unsigned char>(0, x) < 128 ? '1' : '0');
                         }
-                        if (!inBounds) 
+                        if (!inBounds)
                             continue;
-                        try { 
-                            return Decoder::decodeBinary(bits); 
+                        try {
+                            return Decoder::decodeBinary(bits);
                         }
                         catch (const std::exception&) { /* Adjust scale/alignment and symbol length. */ }
                     }
@@ -110,11 +110,11 @@ std::string tryRows(const cv::Mat& binary) {
         cv::Mat majority;
         cv::reduce(stripe, majority, 0, cv::REDUCE_AVG, CV_8U);
         cv::threshold(majority, majority, 127, 255, cv::THRESH_BINARY);
-        try { 
-            return decodeScanline(majority); 
+        try {
+            return decodeScanline(majority);
         }
-        catch (const std::exception& e) { 
-            lastError = e.what(); 
+        catch (const std::exception& e) {
+            lastError = e.what();
         }
     }
     throw std::runtime_error(lastError);
@@ -122,12 +122,19 @@ std::string tryRows(const cv::Mat& binary) {
 
 cv::Mat rotateForDeskew(const cv::Mat& source, double degrees) {
     const cv::Point2f center(source.cols / 2.0F, source.rows / 2.0F);
-    cv::Mat transform = cv::getRotationMatrix2D(center, degrees, 1.0);
     const double radians = degrees * CV_PI / 180.0;
-    const int width = static_cast<int>(std::ceil(source.cols * std::abs(std::cos(radians)) + source.rows * std::abs(std::sin(radians))));
-    const int height = static_cast<int>(std::ceil(source.rows * std::abs(std::cos(radians)) + source.cols * std::abs(std::sin(radians))));
+    const double alpha = std::cos(radians);
+    const double beta = std::sin(radians);
+
+    cv::Mat transform = (cv::Mat_<double>(2, 3) <<
+                             alpha,  beta, (1.0 - alpha) * center.x - beta * center.y,
+                         -beta,  alpha, beta * center.x + (1.0 - alpha) * center.y);
+
+    const int width = static_cast<int>(std::ceil(source.cols * std::abs(alpha) + source.rows * std::abs(beta)));
+    const int height = static_cast<int>(std::ceil(source.rows * std::abs(alpha) + source.cols * std::abs(beta)));
     transform.at<double>(0, 2) += width / 2.0 - center.x;
     transform.at<double>(1, 2) += height / 2.0 - center.y;
+
     cv::Mat rotated;
     cv::warpAffine(source, rotated, transform, cv::Size(width, height), cv::INTER_NEAREST,
                    cv::BORDER_CONSTANT, cv::Scalar(255));
@@ -136,16 +143,16 @@ cv::Mat rotateForDeskew(const cv::Mat& source, double degrees) {
 }
 
 std::string CameraBarcodeReader::read(const cv::Mat& image) const {
-    if (image.empty()) 
+    if (image.empty())
         throw std::invalid_argument("The camera or image returned an empty frame.");
     cv::Mat gray;
-    if (image.channels() == 1) 
+    if (image.channels() == 1)
         gray = image.clone();
-    else if (image.channels() == 3) 
+    else if (image.channels() == 3)
         cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
-    else if (image.channels() == 4) 
+    else if (image.channels() == 4)
         cv::cvtColor(image, gray, cv::COLOR_BGRA2GRAY);
-    else 
+    else
         throw std::invalid_argument("Unsupported camera image format.");
 
     // Run the detector on each right-angle orientation so vertical barcodes work too.
@@ -162,7 +169,7 @@ std::string CameraBarcodeReader::read(const cv::Mat& image) const {
         std::vector<std::string> retailTypes;
         if (retailDetector.detectAndDecodeWithType(orientedGray, retailCodes, retailTypes)) {
             for (const auto& code : retailCodes)
-                if (!code.empty()) 
+                if (!code.empty())
                     return code;
         }
 
@@ -189,11 +196,11 @@ std::string CameraBarcodeReader::read(const cv::Mat& image) const {
                 // Only deskew after the fast horizontal scan fails. Small angle
                 // steps cover handheld tilt without multiplying normal-frame cost.
                 for (const double angle : {-20.0, -10.0, 10.0, 20.0}) {
-                    try { 
-                        return tryRows(rotateForDeskew(binary, angle)); 
+                    try {
+                        return tryRows(rotateForDeskew(binary, angle));
                     }
-                    catch (const std::exception& e) { 
-                        lastError = e.what(); 
+                    catch (const std::exception& e) {
+                        lastError = e.what();
                     }
                 }
             }
@@ -206,7 +213,7 @@ std::string CameraBarcodeReader::readFromCamera(
     const std::function<void(const cv::Mat&)>& onFrame,
     const std::function<bool()>& shouldCancel) const {
     cv::VideoCapture camera(0, cv::CAP_DSHOW);
-    if (!camera.isOpened()) 
+    if (!camera.isOpened())
         camera.open(0);
     if (!camera.isOpened())
         throw std::runtime_error("Could not open a camera. Check that it is connected and available.");

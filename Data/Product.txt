@@ -1,2 +1,1 @@
-# This catalog is pipe-delimited: barcode|name|description|specifications
-# Add one product per line. Example: 123456|Sample item|General description|Color: blue; Size: medium
+1001 456841 TEA GreenTea Pack 566 6 6 14 # barcode_456841.png

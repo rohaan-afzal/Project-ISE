@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.19)
 project(increment111 LANGUAGES CXX)
-
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets)
 #Each dev has to configure OPENCV in QTCreator(Initial Configuration)
 #and also as an environmental variable DO NOT HARDCODE PATH
@@ -17,9 +18,6 @@ if(MINGW AND OpenCV_DIR MATCHES "/vc[0-9]+/" AND
         "OpenCV package compatible with the selected MinGW compiler" FORCE)
 endif()
 find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs videoio objdetect)
-
-set(OpenCV_DIR "C:/Users/HADI/Downloads/opencv/build")
-find_package(OpenCV REQUIRED)
 
 set(CMAKE_AUTOMOC ON)
 
@@ -42,9 +40,47 @@ qt_add_executable(increment111
     Backend/BarcodeReader/BarcodeReader.h
     Backend/BarcodeReader/CameraBarcodeReader.h
     Backend/BarcodeReader/CameraBarcodeReader.cpp
+
     Backend/Product/Product.h
+    Backend/Product/ProductDescriptionView.h
+    Backend/Product/ProductDescriptionView.cpp
+    Backend/Product/ProductLookupController.h
+    Backend/Product/ProductLookupController.cpp
+    Backend/Product/ProductRepository.h
+    Backend/Product/ProductRepository.cpp
     Backend/Product/ProductService.h
     Backend/Product/ProductService.cpp
+
+    Backend/Billing/Record-Format.h
+    Backend/Order/Input-Validator.h
+    Backend/Order/Input-Validator.cpp
+    Backend/Billing/Bill.h
+    Backend/Billing/Bill.cpp
+    Backend/Billing/BillCalc.h
+    Backend/Billing/BillCalc.cpp
+    Backend/Billing/BillRepo.h
+    Backend/Billing/BillRepo.cpp
+    Backend/Billing/BillView.h
+    Backend/Billing/BillView.cpp
+
+    Backend/Order/Payment.h
+    Backend/Order/Order.h
+    Backend/Order/Order.cpp
+    Backend/Order/PaymentProcessor.h
+    Backend/Order/PaymentProcessor.cpp
+    Backend/Order/OrderRepository.h
+    Backend/Order/OrderRepository.cpp
+    Backend/Order/OrderService.h
+    Backend/Order/OrderService.cpp
+
+    Frontend/CameraWidget.h
+    Frontend/CamerWidget.cpp
+    Frontend/BillDialog.h
+    Frontend/BillDialog.cpp
+    Frontend/CashierScreen.h
+    Frontend/CashierScreen.cpp
+    Frontend/ManagerScreen.h
+    Frontend/ManagerScreen.cpp
 )
 
 target_link_libraries(increment111
@@ -59,6 +95,9 @@ target_include_directories(increment111 PRIVATE
     Backend/BarcodeReader
     Backend/Product
     Frontend
+    Backend/Encoder
+    Backend/Billing
+    Backend/Order
     ${OpenCV_INCLUDE_DIRS}
 )
 
