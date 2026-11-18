@@ -1,0 +1,2 @@
+# This catalog is pipe-delimited: barcode|name|description|specifications
+# Add one product per line. Example: 123456|Sample item|General description|Color: blue; Size: medium

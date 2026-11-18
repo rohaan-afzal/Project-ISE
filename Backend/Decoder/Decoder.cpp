@@ -1,4 +1,5 @@
 #include "Decoder.h"
+#include <algorithm>
 #include <stdexcept>
 #include <iostream>
 
@@ -47,51 +48,88 @@ int Decoder::findPatternIndex(const string& patternChunk)
 
 string Decoder::decodeBinary(const string& binaryBits)
 {
-    // 1. Verify minimum length for Code-C 6-digit barcode (Start + 3 data chars + 1 checksum + Stop = 68 bits)
-    if (binaryBits.length() < 68) {
-        throw invalid_argument("Binary string is too short to be a valid Code 128 barcode.");
+    static const string startA = "11010000100";
+    static const string startB = "11010010000";
+    int startCode = -1;
+    int activeSet = 0; // A, B, C
+    const string startBits = binaryBits.substr(0, min<size_t>(11, binaryBits.size()));
+    if (startBits == startA) { startCode = 103; activeSet = 0; }
+    else if (startBits == startB) { startCode = 104; activeSet = 1; }
+    else if (startBits == startPattern) { startCode = startValue; activeSet = 2; }
+    else throw invalid_argument("Invalid Code 128 start pattern.");
+
+    // Start + N data symbols + checksum + 13-bit stop pattern.
+    if (binaryBits.size() < 46 || (binaryBits.size() - 35) % 11 != 0)
+        throw invalid_argument("Incomplete Code 128 symbol.");
+    if (binaryBits.find_first_not_of("01") != string::npos)
+        throw invalid_argument("Code 128 data must contain only binary digits.");
+    const size_t dataCount = (binaryBits.size() - 35) / 11;
+    if (binaryBits.substr(binaryBits.size() - 13) != stopPattern)
+        throw invalid_argument("Invalid Code 128 stop pattern.");
+
+    vector<int> values;
+    values.reserve(dataCount + 1);
+    int weightedDataSum = 0;
+    for (size_t i = 0; i <= dataCount; ++i) {
+        const size_t offset = 11 + i * 11;
+        const int value = findPatternIndex(binaryBits.substr(offset, 11));
+        if (value < 0) throw runtime_error("Invalid Code 128 character pattern.");
+        values.push_back(value);
+        if (i < dataCount) weightedDataSum += value * static_cast<int>(i + 1);
     }
-
-    // 2. Verify Start Pattern
-    string startCheck = binaryBits.substr(0, 11);
-    if (startCheck != startPattern) {
-        throw invalid_argument("Invalid Code 128 Start pattern.");
+    int validatedStart = -1;
+    const int starts[] = {startCode, 103, 104, 105};
+    for (const int candidate : starts) {
+        if ((candidate + weightedDataSum) % checksumDivisor == values.back()) {
+            validatedStart = candidate;
+            break;
+        }
     }
-
-    // 3. Extract 11-bit chunks for data pairs (3 pairs = 6 digits) and 1 checksum chunk
-    // Each character is exactly 11 bits long.
-    // Index mapping: 
-    // Chars 0: start (11 bits)
-    // Char 1: bits 11 to 21 (Digits 1 & 2)
-    // Char 2: bits 22 to 32 (Digits 3 & 4)
-    // Char 3: bits 33 to 43 (Digits 5 & 6)
-    // Char 4: bits 44 to 54 (Checksum character)
-
-    int index1 = findPatternIndex(binaryBits.substr(11, 11));
-    int index2 = findPatternIndex(binaryBits.substr(22, 11));
-    int index3 = findPatternIndex(binaryBits.substr(33, 11));
-    int checksumIndex = findPatternIndex(binaryBits.substr(44, 11));
-
-    if (index1 < 0 || index2 < 0 || index3 < 0 || checksumIndex < 0) {
-        throw runtime_error("Failed to match barcode patterns against Code 128 dictionary.");
-    }
-
-    // 4. Verify Checksum Logic
-    // Formula from encoder: sum = startValue + (val1 * 1) + (val2 * 2) + (val3 * 3); checksum = sum % 103[cite: 4]
-    int calculatedChecksum = (startValue + (index1 * 1) + (index2 * 2) + (index3 * 3)) % checksumDivisor;
-    if (calculatedChecksum != checksumIndex) {
+    if (validatedStart < 0)
         throw runtime_error("Barcode checksum validation failed.");
+
+    string decoded;
+    activeSet = validatedStart == 103 ? 0 : (validatedStart == 104 ? 1 : 2);
+    bool shiftNext = false;
+    auto appendCharacter = [&](int code, int set) {
+        if (set == 2) {
+            if (code < 0 || code > 99) return;
+            string pair = to_string(code);
+            if (code < 10) pair.insert(pair.begin(), '0');
+            decoded += pair;
+        } else if (set == 0 && code <= 95) {
+            decoded.push_back(static_cast<char>(code < 64 ? code + 32 : code - 64));
+        } else if (set == 1 && code <= 95) {
+            decoded.push_back(static_cast<char>(code + 32));
+        }
+    };
+
+    for (size_t index = 0; index < dataCount; ++index) {
+        const int code = values[index];
+        if (activeSet == 2) {
+            if (code <= 99) appendCharacter(code, activeSet);
+            else if (code == 100) activeSet = 1;
+            else if (code == 101) activeSet = 0;
+            // Code 102 (FNC1) is a separator; product lookup uses its digits.
+            continue;
+        }
+        if (shiftNext) {
+            appendCharacter(code, activeSet == 0 ? 1 : 0);
+            shiftNext = false;
+        } else if (code <= 95) {
+            appendCharacter(code, activeSet);
+        } else if (code == 98) {
+            shiftNext = true;
+        } else if (code == 99) {
+            activeSet = 2;
+        } else if (code == 100) {
+            activeSet = 1;
+        } else if (code == 101) {
+            activeSet = 0;
+        }
     }
-
-    // 5. Convert indices back to 2-digit string blocks
-    auto formatPair = [](int val) {
-        string s = to_string(val);
-        if (val < 10) s = "0" + s; // Ensure leading zero if needed (e.g. 5 -> "05")
-        return s;
-        };
-
-    string decodedDigits = formatPair(index1) + formatPair(index2) + formatPair(index3);
-    return decodedDigits;
+    if (decoded.empty()) throw runtime_error("Code 128 barcode contains no product data.");
+    return decoded;
 }
 
 string Decoder::decodeRuns(const vector<ColorRun>& runs, const vector<int>& moduleCounts)

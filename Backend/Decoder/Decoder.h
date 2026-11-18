@@ -19,7 +19,7 @@ private:
     static int findPatternIndex(const string& patternChunk);
 
 public:
-    // Converts a full 68-bit binary string back into the original 6-digit string
+    // Decodes a complete Code 128 symbol, including sets A, B and C.
     static string decodeBinary(const string& binaryBits);
 
     // Converts color runs and normalized module counts directly into the decoded 6-digit string
