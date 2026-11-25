@@ -40,6 +40,9 @@ void ProductDescriptionView::displayProduct(const Product& product)
     statusLabel->setText("Product found");
     productIDLabel->setText("Product ID: " + QString::fromStdString(product.productID));
     barcodeLabel->setText("Barcode: " + QString::fromStdString(product.barcode));
+    statusLabel->setText(product.categoryID.empty()
+        ? "Product found"
+        : "Product found (category " + QString::fromStdString(product.categoryID) + ")");
     acronymLabel->setText("Acronym: " + QString::fromStdString(product.acronym));
     nameLabel->setText("Name: " + QString::fromStdString(product.name));
     unitLabel->setText("Unit: " + QString::fromStdString(product.unit));

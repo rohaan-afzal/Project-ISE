@@ -1,1 +1,4 @@
-1001 456841 TEA GreenTea Pack 566 6 6 14 # barcode_456841.png
+1001 456841 TEA GreenTea Pack 566 6 6 33 # barcode_456841.png
+1002 123456 milk powder_milk Pack 120 1 0 9 # 123456
+1003 654321 xyz xyz Pack 120 1 0 10 #
+1004 101010 abc abc Gram 120 1 0 10 # barcode_101010.png

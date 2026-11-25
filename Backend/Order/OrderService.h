@@ -8,6 +8,8 @@
 #include "OrderRepository.h"
 #include "ProductService.h"
 #include "BillCalc.h"
+#include "InventoryService.h"
+#include "PaymentService.h"
 
 class OrderService
 {
@@ -16,7 +18,13 @@ private:
     OrderRepository& orderRepository;
     OrderDetailRepository& detailRepository;
     BillService& billService;
+    InventoryService inventoryService;
+    PaymentService paymentService;
     Order currentOrder;
+    bool paidOrderEditActive;
+    Order originalPaidOrder;
+    bool resumedHeldOrderActive;
+    Order persistedHeldOrder;
 
     static std::string currentDateString();
     static std::string currentTimeString();
@@ -39,7 +47,12 @@ public:
 
     void holdCurrentOrder();
     std::vector<Order> getHeldOrders() const;
+    std::vector<Order> getEditablePaidOrders() const;
     void resumeOrder(const std::string& orderID);
+    void beginPaidOrderEdit(const std::string& orderID, const std::string& managerName,
+                            bool managerApproved);
+    bool isEditingPaidOrder() const { return paidOrderEditActive; }
+    void archiveOrder(const std::string& orderID);
 
     Bill checkoutAndGenerateBill(const std::string& paymentMode,
         double amountTendered,

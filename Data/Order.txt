@@ -7,3 +7,5 @@ ORD-1006 2026-11-19 02:39:23 Walk - paid cash 3962 Cash\sCounter #
 ORD-1007 2026-11-19 02:43:48 Ali - paid cash 2264 Cash\sCounter #
 ORD-1008 2026-11-19 02:49:40 Walk - paid cash 2830 Cash\sCounter #
 ORD-1009 2026-11-19 02:50:27 Walk - paid cash 566 Cash\sCounter #
+ORD-1010 2026-11-19 08:17:36 Walk - paid cash 121 Cash\sCounter #
+ORD-1011 2026-11-19 11:29:08 Walk - paid card 566 MCB #

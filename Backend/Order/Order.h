@@ -25,6 +25,7 @@ struct Order
     std::string customerName;
     std::string customerPhone;
     std::string status;       // "in-progress", "on-hold", "paid", "archived"
+    std::string managerApprovalName;
     Payment payment;
     std::vector<OrderItem> items;
 

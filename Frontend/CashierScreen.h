@@ -4,6 +4,8 @@
 
 #include <QWidget>
 #include <QString>
+#include <memory>
+#include "../Backend/Product/ProductLookupController.h"
 
 class QLineEdit;
 class QPushButton;
@@ -16,6 +18,7 @@ class CameraWidget;
 class ProductService;
 class OrderService;
 class ProductDescriptionView;
+class DescriptionButton;
 
 class CashierScreen : public QWidget
 {
@@ -38,6 +41,7 @@ private slots:
     void onClearOrderClicked();
     void onHoldOrderClicked();
     void onResumeOrderClicked();
+    void onEditPaidOrderClicked();
     void onPaymentModeChanged(const QString& mode);
     void onCheckoutClicked();
 
@@ -49,7 +53,7 @@ private:
     QLineEdit* m_barcodeInput;
     QSpinBox* m_addQtySpin;
     QPushButton* m_addBtn;
-    QPushButton* m_descriptionBtn;
+    DescriptionButton* m_descriptionBtn;
 
     QLineEdit* m_customerNameInput;
     QLineEdit* m_customerPhoneInput;
@@ -62,6 +66,8 @@ private:
     QPushButton* m_holdBtn;
     QComboBox* m_heldOrdersCombo;
     QPushButton* m_resumeBtn;
+    QComboBox* m_paidOrdersCombo;
+    QPushButton* m_editPaidBtn;
 
     QLabel* m_subtotalLabel;
     QLabel* m_taxLabel;
@@ -74,9 +80,11 @@ private:
     QPushButton* m_checkoutBtn;
     QLabel* m_statusLabel;
     ProductDescriptionView* m_descriptionView;
+    std::unique_ptr<ProductLookupController> m_lookupController;
 
     void setupUi();
     void refreshOrderTable();
+    void refreshPaidOrders();
     void setStatusMessage(const QString& text, bool isError = false);
     QString selectedCartBarcode() const;
 };

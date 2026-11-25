@@ -5,8 +5,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets)
 #Each dev has to configure OPENCV in QTCreator(Initial Configuration)
 #and also as an environmental variable DO NOT HARDCODE PATH
-if(NOT OpenCV_DIR AND DEFINED ENV{OpenCV_DIR})
+if((NOT OpenCV_DIR OR OpenCV_DIR MATCHES "-NOTFOUND$") AND DEFINED ENV{OpenCV_DIR})
     set(OpenCV_DIR "$ENV{OpenCV_DIR}")
+endif()
+
+# Use the repository's bundled OpenCV build when Qt Creator has no valid
+# OpenCV_DIR cache entry (or has cached OpenCV_DIR-NOTFOUND).
+if((NOT OpenCV_DIR OR OpenCV_DIR MATCHES "-NOTFOUND$") AND MINGW AND
+   EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/opencv-install/OpenCVConfig.cmake")
+    set(OpenCV_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/opencv-install" CACHE PATH
+        "Bundled OpenCV package compatible with the selected MinGW compiler" FORCE)
 endif()
 
 # Qt's MinGW kits cannot link against OpenCV's MSVC (vcXX) libraries. If a
@@ -42,6 +50,9 @@ qt_add_executable(increment111
     Backend/BarcodeReader/CameraBarcodeReader.cpp
 
     Backend/Product/Product.h
+    Backend/Product/BarcodeGenerator.h
+    Backend/Product/ProductBarcodeGenerator.h
+    Backend/Product/ProductBarcodeGenerator.cpp
     Backend/Product/ProductDescriptionView.h
     Backend/Product/ProductDescriptionView.cpp
     Backend/Product/ProductLookupController.h
@@ -72,8 +83,17 @@ qt_add_executable(increment111
     Backend/Order/OrderRepository.cpp
     Backend/Order/OrderService.h
     Backend/Order/OrderService.cpp
+    Backend/Order/InventoryService.h
+    Backend/Order/InventoryService.cpp
+    Backend/Order/OrderWorkflowValidator.h
+    Backend/Order/OrderWorkflowValidator.cpp
+    Backend/Order/OrderApprovalService.h
+    Backend/Order/OrderApprovalService.cpp
+    Backend/Order/PaymentService.h
+    Backend/Order/PaymentService.cpp
 
     Frontend/CameraWidget.h
+    Frontend/DescriptionButton.h
     Frontend/CamerWidget.cpp
     Frontend/BillDialog.h
     Frontend/BillDialog.cpp

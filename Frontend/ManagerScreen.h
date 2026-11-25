@@ -14,6 +14,7 @@ class QPushButton;
 class QLabel;
 class QTableWidget;
 class ProductService;
+class CameraWidget;
 
 class ManagerScreen : public QWidget
 {
@@ -33,6 +34,7 @@ private slots:
     void onSaveBarcodeImageClicked();
     void onRestockClicked();
     void onRemoveProductClicked();
+    void onBarcodeScanned(const QString& barcode);
 
 private:
     ProductService* m_productService;
@@ -40,6 +42,7 @@ private:
 
     QLineEdit* m_idInput;
     QLineEdit* m_barcodeInput;
+    QComboBox* m_categoryCombo;
     QLineEdit* m_acronymInput;
     QLineEdit* m_nameInput;
     QComboBox* m_unitCombo;
@@ -60,6 +63,7 @@ private:
 
     QLabel* m_barcodePreview;
     QLabel* m_statusLabel;
+    CameraWidget* m_cameraWidget;
     QTableWidget* m_productTable;
     QImage m_generatedBarcodeImage;
 

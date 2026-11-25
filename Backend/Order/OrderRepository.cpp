@@ -1,6 +1,7 @@
 #include "OrderRepository.h"
 #include "Record-Format.h"
 #include <fstream>
+#include <map>
 #include <stdexcept>
 
 OrderRepository::OrderRepository(const std::string& path)
@@ -22,7 +23,7 @@ std::vector<Order> OrderRepository::getAllOrders() const
             continue;
 
         std::vector<std::string> fields;
-        if (!RecordFormat::splitLine(line, fields) || fields.size() != 9)
+        if (!RecordFormat::splitLine(line, fields) || (fields.size() != 9 && fields.size() != 10))
             continue;
 
         Order order;
@@ -35,6 +36,8 @@ std::vector<Order> OrderRepository::getAllOrders() const
         order.payment.mode = RecordFormat::unescapeText(fields[6]);
         RecordFormat::toDouble(fields[7], order.payment.amount);
         order.payment.merchant = RecordFormat::unescapeText(fields[8]);
+        if (fields.size() == 10)
+            order.managerApprovalName = RecordFormat::unescapeText(fields[9]);
 
         orders.push_back(order);
     }
@@ -61,6 +64,14 @@ void OrderRepository::saveOrder(const Order& order) const
     saveAllOrders(all);
 }
 
+void OrderRepository::removeOrder(const std::string& orderID) const
+{
+    std::vector<Order> remaining;
+    for (const auto& order : getAllOrders())
+        if (order.orderID != orderID) remaining.push_back(order);
+    saveAllOrders(remaining);
+}
+
 void OrderRepository::saveAllOrders(const std::vector<Order>& orders) const
 {
     std::ofstream file(filePath.c_str(), std::ios::trunc);
@@ -78,7 +89,8 @@ void OrderRepository::saveAllOrders(const std::vector<Order>& orders) const
             RecordFormat::escapeText(order.status),
             RecordFormat::escapeText(order.payment.mode),
             RecordFormat::formatNumber(order.payment.amount),
-            RecordFormat::escapeText(order.payment.merchant)
+            RecordFormat::escapeText(order.payment.merchant),
+            RecordFormat::escapeText(order.managerApprovalName)
         };
         file << RecordFormat::joinFields(fields) << "\n";
     }
@@ -94,10 +106,23 @@ OrderDetailRepository::OrderDetailRepository(const std::string& path)
 
 void OrderDetailRepository::saveOrderDetails(const std::string& orderID, const std::vector<OrderItem>& items) const
 {
-    std::ofstream file(filePath.c_str(), std::ios::app);
+    std::vector<std::string> retainedLines;
+    {
+        std::ifstream input(filePath.c_str());
+        std::string line;
+        while (std::getline(input, line)) {
+            std::vector<std::string> fields;
+            if (RecordFormat::splitLine(line, fields) && !fields.empty() &&
+                RecordFormat::unescapeText(fields[0]) == orderID)
+                continue;
+            retainedLines.push_back(line);
+        }
+    }
+
+    std::ofstream file(filePath.c_str(), std::ios::trunc);
     if (!file.is_open())
         throw std::runtime_error("Could not open order detail file for writing: " + filePath);
-
+    for (const auto& line : retainedLines) file << line << "\n";
     for (const auto& item : items)
     {
         std::vector<std::string> fields = {
@@ -117,6 +142,7 @@ void OrderDetailRepository::saveOrderDetails(const std::string& orderID, const s
 std::vector<OrderItem> OrderDetailRepository::getDetailsForOrder(const std::string& orderID, const ProductService& productService) const
 {
     std::vector<OrderItem> items;
+    std::map<std::string, std::size_t> indexByBarcode;
     std::ifstream file(filePath.c_str());
     if (!file.is_open())
         return items;
@@ -142,7 +168,14 @@ std::vector<OrderItem> OrderDetailRepository::getDetailsForOrder(const std::stri
         Product prod;
         if (productService.getProductByBarcode(barcode, prod))
         {
-            items.emplace_back(prod, qty);
+            const auto existing = indexByBarcode.find(barcode);
+            if (existing == indexByBarcode.end()) {
+                indexByBarcode.emplace(barcode, items.size());
+                items.emplace_back(prod, qty);
+            } else {
+                items[existing->second].quantity += qty;
+                items[existing->second].product = prod;
+            }
         }
     }
 

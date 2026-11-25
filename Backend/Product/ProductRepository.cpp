@@ -44,6 +44,7 @@ std::vector<Product> ProductRepository::getAllProducts() const
         std::string imgPath;
         if (iss >> imgPath)
             p.barcodeImagePath = imgPath;
+        iss >> p.categoryID; // Optional for compatibility with existing Product.txt rows.
 
         products.push_back(p);
     }
@@ -95,6 +96,8 @@ bool ProductRepository::addProduct(const Product& product) const
 
     if (!product.barcodeImagePath.empty())
         file << " " << product.barcodeImagePath;
+    if (!product.categoryID.empty())
+        file << " " << product.categoryID;
 
     file << std::endl;
     file.close();
@@ -121,6 +124,8 @@ bool ProductRepository::saveAllProducts(const std::vector<Product>& products) co
 
         if (!product.barcodeImagePath.empty())
             file << " " << product.barcodeImagePath;
+        if (!product.categoryID.empty())
+            file << " " << product.categoryID;
 
         file << std::endl;
     }

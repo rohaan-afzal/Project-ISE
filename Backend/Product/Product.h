@@ -16,6 +16,7 @@ struct Product
     double discount;
     int quantity;
     std::string barcodeImagePath;
+    std::string categoryID;
 
     Product()
         : unitPrice(0.0), tax(0.0), discount(0.0), quantity(0)

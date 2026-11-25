@@ -17,6 +17,7 @@ public:
 
     std::vector<Order> getAllOrders() const;
     void saveOrder(const Order& order) const;
+    void removeOrder(const std::string& orderID) const;
     void saveAllOrders(const std::vector<Order>& orders) const;
 };
 

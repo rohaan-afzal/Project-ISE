@@ -3,6 +3,8 @@
 #include "BillDialog.h"
 #include "../Backend/Product/ProductService.h"
 #include "../Backend/Product/ProductDescriptionView.h"
+#include "../Backend/Product/ProductLookupController.h"
+#include "DescriptionButton.h"
 #include "../Backend/Order/OrderService.h"
 
 #include <QVBoxLayout>
@@ -20,7 +22,9 @@
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
 #include <QMessageBox>
+#include <QInputDialog>
 #include <QFont>
+#include <algorithm>
 #include <stdexcept>
 
 CashierScreen::CashierScreen(ProductService* productService,
@@ -33,6 +37,7 @@ CashierScreen::CashierScreen(ProductService* productService,
     setupUi();
     refreshOrderTable();
     refreshHeldOrders();
+    refreshPaidOrders();
 }
 
 void CashierScreen::setupUi()
@@ -61,7 +66,7 @@ void CashierScreen::setupUi()
     m_addQtySpin->setPrefix("Qty: ");
 
     m_addBtn = new QPushButton("Add Item", this);
-    m_descriptionBtn = new QPushButton("Description", this);
+    m_descriptionBtn = new DescriptionButton(this);
 
     manualRow->addWidget(m_barcodeInput, 1);
     manualRow->addWidget(m_addQtySpin);
@@ -74,6 +79,7 @@ void CashierScreen::setupUi()
     QGroupBox* descGroup = new QGroupBox("Product Specifications", this);
     QVBoxLayout* descLayout = new QVBoxLayout(descGroup);
     m_descriptionView = new ProductDescriptionView(this);
+    m_lookupController = std::make_unique<ProductLookupController>(m_productService, m_descriptionView);
     descLayout->addWidget(m_descriptionView);
     leftCol->addWidget(descGroup, 1);
 
@@ -139,6 +145,14 @@ void CashierScreen::setupUi()
     heldRow->addWidget(m_resumeBtn);
     cartLayout->addLayout(heldRow);
 
+    QHBoxLayout* paidEditRow = new QHBoxLayout();
+    paidEditRow->addWidget(new QLabel("Paid orders (7 days):", this));
+    m_paidOrdersCombo = new QComboBox(this);
+    m_editPaidBtn = new QPushButton("Edit with Manager Approval", this);
+    paidEditRow->addWidget(m_paidOrdersCombo, 1);
+    paidEditRow->addWidget(m_editPaidBtn);
+    cartLayout->addLayout(paidEditRow);
+
     rightCol->addWidget(cartGroup, 2);
 
     QGroupBox* checkoutGroup = new QGroupBox("4. Totals & Payment", this);
@@ -196,6 +210,7 @@ void CashierScreen::setupUi()
     connect(m_clearBtn, &QPushButton::clicked, this, &CashierScreen::onClearOrderClicked);
     connect(m_holdBtn, &QPushButton::clicked, this, &CashierScreen::onHoldOrderClicked);
     connect(m_resumeBtn, &QPushButton::clicked, this, &CashierScreen::onResumeOrderClicked);
+    connect(m_editPaidBtn, &QPushButton::clicked, this, &CashierScreen::onEditPaidOrderClicked);
     connect(m_paymentModeCombo, &QComboBox::currentTextChanged, this, &CashierScreen::onPaymentModeChanged);
     connect(m_checkoutBtn, &QPushButton::clicked, this, &CashierScreen::onCheckoutClicked);
 
@@ -225,13 +240,10 @@ QString CashierScreen::selectedCartBarcode() const
 void CashierScreen::onBarcodeScanned(const QString& barcode)
 {
     m_barcodeInput->setText(barcode);
+    m_lookupController->showProductDescription(barcode.toStdString());
     try
     {
         m_orderService->addProductByBarcode(barcode.toStdString(), 1);
-        Product prod;
-        if (m_productService->getProductByBarcode(barcode.toStdString(), prod))
-            m_descriptionView->displayProduct(prod);
-
         refreshOrderTable();
         setStatusMessage("Added scanned product: " + barcode);
     }
@@ -250,13 +262,10 @@ void CashierScreen::onManualAddClicked()
         return;
     }
 
+    m_lookupController->showProductDescription(barcode.toStdString());
     try
     {
         m_orderService->addProductByBarcode(barcode.toStdString(), m_addQtySpin->value());
-        Product prod;
-        if (m_productService->getProductByBarcode(barcode.toStdString(), prod))
-            m_descriptionView->displayProduct(prod);
-
         refreshOrderTable();
         setStatusMessage("Added " + QString::number(m_addQtySpin->value()) + "x barcode " + barcode + ".");
         m_barcodeInput->clear();
@@ -280,17 +289,12 @@ void CashierScreen::onDescriptionClicked()
         return;
     }
 
+    m_lookupController->showProductDescription(barcode.toStdString());
     Product prod;
     if (m_productService->getProductByBarcode(barcode.toStdString(), prod))
-    {
-        m_descriptionView->displayProduct(prod);
         setStatusMessage("Showing description for " + QString::fromStdString(prod.name) + ".");
-    }
     else
-    {
-        m_descriptionView->displayNotFound(barcode.toStdString());
         setStatusMessage("Product not found for barcode: " + barcode, true);
-    }
 }
 
 void CashierScreen::onUpdateQtyClicked()
@@ -331,6 +335,8 @@ void CashierScreen::onRemoveItemClicked()
 void CashierScreen::onClearOrderClicked()
 {
     m_orderService->clearOrder();
+    m_checkoutBtn->setText("Complete Payment && Generate Bill");
+    m_holdBtn->setEnabled(true);
     m_customerNameInput->clear();
     m_customerPhoneInput->clear();
     refreshOrderTable();
@@ -355,6 +361,7 @@ void CashierScreen::onHoldOrderClicked()
         m_customerPhoneInput->clear();
         refreshOrderTable();
         refreshHeldOrders();
+        refreshPaidOrders();
         setStatusMessage("Order " + QString::fromStdString(heldId) + " placed on hold.");
     }
     catch (const std::exception& e)
@@ -387,6 +394,49 @@ void CashierScreen::onResumeOrderClicked()
     }
 }
 
+void CashierScreen::onEditPaidOrderClicked()
+{
+    if (m_paidOrdersCombo->count() == 0)
+    {
+        setStatusMessage("There are no paid orders eligible for editing in the last seven days.", true);
+        return;
+    }
+
+    const QString orderID = m_paidOrdersCombo->currentData().toString();
+    if (QMessageBox::question(this, "Manager approval required",
+            "A manager must approve editing paid order " + orderID + ". Continue with approval?")
+        != QMessageBox::Yes)
+        return;
+
+    bool accepted = false;
+    const QString managerName = QInputDialog::getText(
+        this, "Manager approval", "Manager name approving this paid-order edit:",
+        QLineEdit::Normal, QString(), &accepted).trimmed();
+    if (!accepted) return;
+    if (managerName.isEmpty())
+    {
+        setStatusMessage("Manager approval requires a name.", true);
+        return;
+    }
+
+    try
+    {
+        m_orderService->beginPaidOrderEdit(orderID.toStdString(), managerName.toStdString(), true);
+        const Order& order = m_orderService->getCurrentOrder();
+        m_customerNameInput->setText(QString::fromStdString(order.customerName).left(4));
+        m_customerPhoneInput->setText(order.customerPhone == "-" ? "" :
+            QString::fromStdString(order.customerPhone).left(11));
+        m_checkoutBtn->setText("Save Paid Edit && Adjust Payment");
+        m_holdBtn->setEnabled(false);
+        refreshOrderTable();
+        setStatusMessage("Editing paid order " + orderID + ". Manager approval by " + managerName + " recorded.");
+    }
+    catch (const std::exception& e)
+    {
+        setStatusMessage(QString::fromUtf8(e.what()), true);
+    }
+}
+
 void CashierScreen::refreshHeldOrders()
 {
     m_heldOrdersCombo->clear();
@@ -397,6 +447,17 @@ void CashierScreen::refreshHeldOrders()
         const QString label = id + " - " + QString::fromStdString(ord.customerName) +
             " (" + QString::fromStdString(ord.time) + ")";
         m_heldOrdersCombo->addItem(label, id);
+    }
+}
+
+void CashierScreen::refreshPaidOrders()
+{
+    m_paidOrdersCombo->clear();
+    for (const auto& order : m_orderService->getEditablePaidOrders())
+    {
+        const QString id = QString::fromStdString(order.orderID);
+        m_paidOrdersCombo->addItem(id + " - " + QString::fromStdString(order.customerName) +
+                                   " (paid " + QString::fromStdString(order.date) + ")", id);
     }
 }
 
@@ -413,13 +474,17 @@ void CashierScreen::onPaymentModeChanged(const QString& mode)
     {
         m_merchantCombo->addItems(QStringList() << "HBL" << "Meezan Bank" << "Bank Alfalah" << "UBL" << "MCB" << "Allied Bank");
         m_merchantCombo->setEnabled(true);
-        m_tenderedSpin->setValue(m_orderService->getTotalPayable());
+        const Order& order = m_orderService->getCurrentOrder();
+        m_tenderedSpin->setValue(std::max(0.0, m_orderService->getTotalPayable() -
+            (m_orderService->isEditingPaidOrder() ? order.payment.amount : 0.0)));
     }
     else
     {
         m_merchantCombo->addItems(QStringList() << "JazzCash" << "EasyPaisa" << "SadaPay" << "NayaPay");
         m_merchantCombo->setEnabled(true);
-        m_tenderedSpin->setValue(m_orderService->getTotalPayable());
+        const Order& order = m_orderService->getCurrentOrder();
+        m_tenderedSpin->setValue(std::max(0.0, m_orderService->getTotalPayable() -
+            (m_orderService->isEditingPaidOrder() ? order.payment.amount : 0.0)));
     }
 }
 
@@ -427,6 +492,16 @@ void CashierScreen::onCheckoutClicked()
 {
     try
     {
+        if (m_orderService->isEditingPaidOrder())
+        {
+            const double difference = m_orderService->getTotalPayable() -
+                m_orderService->getCurrentOrder().payment.amount;
+            if (difference < -0.005 && QMessageBox::question(
+                    this, "Confirm refund",
+                    "This edit reduces the paid total by PKR " + QString::number(-difference, 'f', 2) +
+                    ". Confirm the refund?") != QMessageBox::Yes)
+                return;
+        }
         const QString custName = m_customerNameInput->text().trimmed().isEmpty()
             ? "Walk"
             : m_customerNameInput->text().trimmed();
@@ -437,11 +512,19 @@ void CashierScreen::onCheckoutClicked()
         const std::string mode = m_paymentModeCombo->currentText().toStdString();
         const std::string merchant = m_merchantCombo->currentText().toStdString();
         const double tendered = m_tenderedSpin->value();
+        const bool editingPaidOrder = m_orderService->isEditingPaidOrder();
+        const Payment oldPayment = m_orderService->getCurrentOrder().payment;
+        const double previouslyPaid = oldPayment.amount;
+        const double adjustment = m_orderService->getTotalPayable() - previouslyPaid;
 
         const Bill bill = m_orderService->checkoutAndGenerateBill(mode, tendered, merchant);
-        const Payment paymentSummary(bill.totalPayable, mode, merchant);
+        const Payment paymentSummary = editingPaidOrder && adjustment < -0.005
+            ? Payment(bill.totalPayable, oldPayment.mode, oldPayment.merchant)
+            : Payment(bill.totalPayable, mode, merchant);
 
-        BillDialog dialog(bill, paymentSummary, tendered, this);
+        const double receiptTendered = editingPaidOrder
+            ? (tendered > 0.0 ? previouslyPaid + tendered : 0.0) : tendered;
+        BillDialog dialog(bill, paymentSummary, receiptTendered, this);
         dialog.exec();
 
         m_customerNameInput->clear();
@@ -449,6 +532,9 @@ void CashierScreen::onCheckoutClicked()
         m_tenderedSpin->setValue(0.0);
         refreshOrderTable();
         refreshHeldOrders();
+        refreshPaidOrders();
+        m_checkoutBtn->setText("Complete Payment && Generate Bill");
+        m_holdBtn->setEnabled(true);
         setStatusMessage("Bill #" + QString::fromStdString(bill.billID) + " saved, paid, and stock updated.");
     }
     catch (const std::exception& e)
@@ -487,6 +573,7 @@ void CashierScreen::refreshOrderTable()
     m_discountLabel->setText("PKR " + QString::number(m_orderService->getTotalDiscount(), 'f', 2));
     m_payableLabel->setText("PKR " + QString::number(payable, 'f', 2));
 
-    if (m_paymentModeCombo->currentText() != "cash")
-        m_tenderedSpin->setValue(payable);
+    const double amountToCollect = m_orderService->isEditingPaidOrder()
+        ? std::max(0.0, payable - order.payment.amount) : payable;
+    m_tenderedSpin->setValue(amountToCollect);
 }

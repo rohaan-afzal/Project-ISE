@@ -27,6 +27,12 @@ Payment CashPaymentProcessor::process(double amountDue, double amountTendered, c
     return Payment(amountDue, "cash", resolvedMerchant);
 }
 
+Payment CashPaymentProcessor::processRefund(double refundAmount, const std::string& merchant) const
+{
+    if (refundAmount <= 0.0) throw std::invalid_argument("Refund amount must be greater than zero.");
+    return Payment(refundAmount, "cash", merchant.empty() ? "Cash Counter" : merchant);
+}
+
 Payment CardPaymentProcessor::process(double amountDue, double amountTendered, const std::string& merchant) const
 {
     if (amountDue <= 0.0)
@@ -42,6 +48,13 @@ Payment CardPaymentProcessor::process(double amountDue, double amountTendered, c
     return Payment(amountDue, "card", merchant);
 }
 
+Payment CardPaymentProcessor::processRefund(double refundAmount, const std::string& merchant) const
+{
+    if (refundAmount <= 0.0) throw std::invalid_argument("Refund amount must be greater than zero.");
+    if (merchant.empty()) throw std::invalid_argument("Card merchant/bank name is required for a refund.");
+    return Payment(refundAmount, "card", merchant);
+}
+
 Payment WalletPaymentProcessor::process(double amountDue, double amountTendered, const std::string& merchant) const
 {
     if (amountDue <= 0.0)
@@ -55,4 +68,11 @@ Payment WalletPaymentProcessor::process(double amountDue, double amountTendered,
         throw std::invalid_argument("Invalid wallet payment details.");
 
     return Payment(amountDue, "wallet", merchant);
+}
+
+Payment WalletPaymentProcessor::processRefund(double refundAmount, const std::string& merchant) const
+{
+    if (refundAmount <= 0.0) throw std::invalid_argument("Refund amount must be greater than zero.");
+    if (merchant.empty()) throw std::invalid_argument("Wallet provider is required for a refund.");
+    return Payment(refundAmount, "wallet", merchant);
 }

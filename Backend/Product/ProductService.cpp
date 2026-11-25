@@ -26,6 +26,9 @@ bool ProductService::addProduct(const Product& product) const
         return false;
     if (!InputValidator::isValidBarcode(product.barcode))
         return false;
+    if (!product.categoryID.empty() &&
+        (product.categoryID.size() != 2 || product.barcode.substr(0, 2) != product.categoryID))
+        return false;
     if (product.acronym.empty() || product.name.empty())
         return false;
     if (!InputValidator::isValidUnit(product.unit))

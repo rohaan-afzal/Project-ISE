@@ -2,6 +2,8 @@
 #include "../Backend/Product/ProductService.h"
 #include "../Backend/Encoder/Encoder.h"
 #include "../Backend/imageGenerator/BarcodeImageGenerator.h"
+#include "../Backend/Product/ProductBarcodeGenerator.h"
+#include "CameraWidget.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -21,6 +23,8 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QFrame>
+#include <QDir>
+#include <QFileInfo>
 #include <stdexcept>
 #include <vector>
 
@@ -51,8 +55,22 @@ void ManagerScreen::setupUi()
     m_barcodeInput = new QLineEdit(this);
     m_barcodeInput->setPlaceholderText("6-digit barcode (first digit 1-9)");
     m_barcodeInput->setMaxLength(6);
+    m_barcodeInput->setReadOnly(true);
     m_barcodeInput->setValidator(
         new QRegularExpressionValidator(QRegularExpression("[1-9][0-9]{0,5}"), m_barcodeInput));
+
+    m_categoryCombo = new QComboBox(this);
+    m_categoryCombo->addItem("10 - Grocery", "10");
+    m_categoryCombo->addItem("20 - Household", "20");
+    m_categoryCombo->addItem("30 - Personal care", "30");
+    m_categoryCombo->addItem("40 - Stationery", "40");
+    connect(m_categoryCombo, &QComboBox::currentIndexChanged, this, [this]() {
+        m_barcodeInput->clear();
+        m_imagePathInput->clear();
+        m_generatedBarcodeImage = QImage();
+        m_barcodePreview->setText("Barcode preview");
+        m_saveBarcodeBtn->setEnabled(false);
+    });
 
     m_acronymInput = new QLineEdit(this);
     m_acronymInput->setPlaceholderText("e.g. TEA");
@@ -81,10 +99,12 @@ void ManagerScreen::setupUi()
     m_quantitySpin->setValue(10);
 
     m_imagePathInput = new QLineEdit(this);
-    m_imagePathInput->setPlaceholderText("e.g. tea.png (optional)");
+    m_imagePathInput->setReadOnly(true);
+    m_imagePathInput->setPlaceholderText("Generated when the product is saved");
 
     form->addRow("Product ID:", m_idInput);
-    form->addRow("Barcode (6-digit):", m_barcodeInput);
+    form->addRow("Category:", m_categoryCombo);
+    form->addRow("Barcode (generated):", m_barcodeInput);
     form->addRow("Acronym:", m_acronymInput);
     form->addRow("Name:", m_nameInput);
     form->addRow("Unit:", m_unitCombo);
@@ -115,6 +135,9 @@ void ManagerScreen::setupUi()
     m_statusLabel = new QLabel("Ready.", this);
     m_statusLabel->setWordWrap(true);
     leftLayout->addWidget(m_statusLabel);
+    leftLayout->addWidget(new QLabel("Scan an existing product barcode", this));
+    m_cameraWidget = new CameraWidget(this);
+    leftLayout->addWidget(m_cameraWidget);
 
     rootLayout->addWidget(formGroup, 4);
 
@@ -156,7 +179,22 @@ void ManagerScreen::setupUi()
     connect(m_addProductBtn, &QPushButton::clicked, this, &ManagerScreen::onAddProductClicked);
     connect(m_restockBtn, &QPushButton::clicked, this, &ManagerScreen::onRestockClicked);
     connect(m_removeProductBtn, &QPushButton::clicked, this, &ManagerScreen::onRemoveProductClicked);
+    connect(m_cameraWidget, &CameraWidget::barcodeScanned, this, &ManagerScreen::onBarcodeScanned);
     connect(m_refreshBtn, &QPushButton::clicked, this, &ManagerScreen::refreshProductTable);
+}
+
+void ManagerScreen::onBarcodeScanned(const QString& barcode)
+{
+    Product product;
+    if (m_productService->getProductByBarcode(barcode.toStdString(), product))
+    {
+        setStatusMessage("Found " + QString::fromStdString(product.name) +
+                         " (" + barcode + "), stock " + QString::number(product.quantity) + ".");
+    }
+    else
+    {
+        setStatusMessage("No product found for barcode: " + barcode, true);
+    }
 }
 
 void ManagerScreen::setStatusMessage(const QString& text, bool isError)
@@ -175,9 +213,14 @@ QString ManagerScreen::selectedCatalogBarcode() const
 
 void ManagerScreen::onGenerateBarcodeClicked()
 {
-    const QString code = m_barcodeInput->text().trimmed();
     try
     {
+        std::vector<std::string> existing;
+        for (const Product& product : m_productService->getAllProducts())
+            existing.push_back(product.barcode);
+        ProductBarcodeGenerator codeGenerator;
+        const QString code = QString::fromStdString(
+            codeGenerator.generate(m_categoryCombo->currentData().toString().toStdString(), existing));
         const std::string bits = Encoder::encode(code.toStdString());
         BarcodeImageGenerator generator;
         m_generatedBarcodeImage = generator.generate(bits);
@@ -185,8 +228,8 @@ void ManagerScreen::onGenerateBarcodeClicked()
         m_barcodePreview->setPixmap(QPixmap::fromImage(m_generatedBarcodeImage).scaled(
             m_barcodePreview->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
         m_saveBarcodeBtn->setEnabled(true);
-        if (m_imagePathInput->text().trimmed().isEmpty())
-            m_imagePathInput->setText("barcode_" + code + ".png");
+        m_barcodeInput->setText(code);
+        m_imagePathInput->setText("Barcodes/barcode_" + code + ".png");
 
         setStatusMessage("Generated barcode preview for " + code + ".");
     }
@@ -222,6 +265,7 @@ void ManagerScreen::onAddProductClicked()
     Product p;
     p.productID = m_idInput->text().trimmed().toStdString();
     p.barcode = m_barcodeInput->text().trimmed().toStdString();
+    p.categoryID = m_categoryCombo->currentData().toString().toStdString();
     p.acronym = m_acronymInput->text().trimmed().toStdString();
     p.name = m_nameInput->text().trimmed().replace(' ', '_').toStdString();
     p.unit = m_unitCombo->currentText().toStdString();
@@ -229,7 +273,34 @@ void ManagerScreen::onAddProductClicked()
     p.tax = m_taxSpin->value();
     p.discount = m_discountSpin->value();
     p.quantity = m_quantitySpin->value();
-    p.barcodeImagePath = m_imagePathInput->text().trimmed().toStdString();
+    if (p.barcode.size() != 6 || p.barcode.substr(0, 2) != p.categoryID)
+    {
+        setStatusMessage("Generate a barcode for the selected category before saving the product.", true);
+        return;
+    }
+    const QString imageName = "barcode_" + QString::fromStdString(p.barcode) + ".png";
+    const QString imageDirectory = QFileInfo(m_productFilePath).absolutePath() + "/Barcodes";
+    if (!QDir().mkpath(imageDirectory))
+    {
+        setStatusMessage("Could not create the barcode image directory.", true);
+        return;
+    }
+    try
+    {
+        const std::string bits = Encoder::encode(p.barcode);
+        if (!BarcodeImageGenerator().saveAsPng(
+                bits, QDir(imageDirectory).filePath(imageName)))
+        {
+            setStatusMessage("Could not save the barcode image; product was not added.", true);
+            return;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        setStatusMessage(QString::fromUtf8(e.what()), true);
+        return;
+    }
+    p.barcodeImagePath = ("Barcodes/" + imageName).toStdString();
 
     if (m_productService->addProduct(p))
     {
