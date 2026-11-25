@@ -3,6 +3,7 @@
 #define MANAGERSCREEN_H
 
 #include <QWidget>
+#include <QFrame>
 #include <QString>
 #include <QImage>
 #include "../Backend/Category/CategoryService.h"
@@ -18,6 +19,37 @@ class QPushButton;
 class QLabel;
 class QTableWidget;
 class QGroupBox;
+class QPropertyAnimation;
+class QEvent;
+class QEnterEvent;
+class QResizeEvent;
+
+class CatalogDrawer : public QFrame
+{
+    Q_OBJECT
+
+public:
+    explicit CatalogDrawer(QWidget* parent = nullptr);
+
+    QWidget* contentContainer() const { return m_bodyWidget; }
+    bool isPinned() const;
+    void setExpanded(bool expanded, bool animated = true);
+    void repositionInParent();
+
+protected:
+    void enterEvent(QEnterEvent* event) override;
+    void leaveEvent(QEvent* event) override;
+
+private:
+    static constexpr int kHandleWidth = 42;
+    static constexpr int kPanelWidth = 740;
+
+    QLabel* m_handleLabel = nullptr;
+    QWidget* m_bodyWidget = nullptr;
+    QCheckBox* m_pinCheck = nullptr;
+    QPropertyAnimation* m_slideAnim = nullptr;
+    bool m_isExpanded = false;
+};
 
 class ManagerScreen : public QWidget
 {
@@ -31,8 +63,11 @@ public:
 public slots:
     void refreshProductTable();
 
+protected:
+    void resizeEvent(QResizeEvent* event) override;
+
 private slots:
-    // Category Management (Req 1)
+    // Category Management
     void onAddCategoryClicked();
     void refreshCategoryList();
     void onCategorySelectionChanged(int index);
@@ -46,7 +81,7 @@ private slots:
     void onRestockClicked();
     void onRemoveProductClicked();
 
-    // Seasonal Discounts & Bill PDF Viewer (Batch 2)
+    // Seasonal Discounts & Bill PDF Viewer
     void refreshSeasonsTable();
     void onAddSeasonClicked();
     void onToggleSeasonActiveClicked();
@@ -95,7 +130,8 @@ private:
     QPushButton* m_cancelEditBtn = nullptr;
     QLabel* m_statusLabel = nullptr;
 
-    // Catalog Controls
+    // Hover-Expandable Catalog Drawer & Controls
+    CatalogDrawer* m_catalogDrawer = nullptr;
     QTableWidget* m_productTable = nullptr;
     QSpinBox* m_restockSpin = nullptr;
     QPushButton* m_editProductBtn = nullptr;

@@ -41,6 +41,12 @@ qt_add_executable(increment111
     Backend/BarcodeReader/CameraBarcodeReader.h
     Backend/BarcodeReader/CameraBarcodeReader.cpp
 
+    Backend/Category/ProductCategory.h
+    Backend/Category/CategoryRepo.h
+    Backend/Category/CategoryRepo.cpp
+    Backend/Category/CategoryService.h
+    Backend/Category/CategoryService.cpp
+
     Backend/Product/Product.h
     Backend/Product/ProductDescriptionView.h
     Backend/Product/ProductDescriptionView.cpp
@@ -54,14 +60,6 @@ qt_add_executable(increment111
     Backend/Billing/Record-Format.h
     Backend/Order/Input-Validator.h
     Backend/Order/Input-Validator.cpp
-    Backend/Billing/Bill.h
-    Backend/Billing/Bill.cpp
-    Backend/Billing/BillCalc.h
-    Backend/Billing/BillCalc.cpp
-    Backend/Billing/BillRepo.h
-    Backend/Billing/BillRepo.cpp
-    Backend/Billing/BillView.h
-    Backend/Billing/BillView.cpp
 
     Backend/Order/Payment.h
     Backend/Order/Order.h
@@ -73,6 +71,24 @@ qt_add_executable(increment111
     Backend/Order/OrderService.h
     Backend/Order/OrderService.cpp
 
+    Backend/Billing/RecordFormat3.h
+    Backend/Billing/Bill3.h
+    Backend/Billing/Bill3.cpp
+    Backend/Billing/BillCalc3.h
+    Backend/Billing/BillCalc3.cpp
+    Backend/Billing/BillRepo3.h
+    Backend/Billing/BillRepo3.cpp
+    Backend/Billing/BillView3.h
+    Backend/Billing/BillView3.cpp
+    Backend/Billing/PdfBillGenerator3.h
+    Backend/Billing/PdfBillGenerator3.cpp
+    Backend/Billing/SeasonRepository.h
+    Backend/Billing/SeasonRepository.cpp
+    Backend/Reports/ReportService.h
+    Backend/Reports/ReportService.cpp
+
+    Frontend/ReportsScreen.h
+    Frontend/ReportsScreen.cpp
     Frontend/CameraWidget.h
     Frontend/CamerWidget.cpp
     Frontend/BillDialog.h
@@ -81,6 +97,13 @@ qt_add_executable(increment111
     Frontend/CashierScreen.cpp
     Frontend/ManagerScreen.h
     Frontend/ManagerScreen.cpp
+    Frontend/EditOrderDialog.h
+    Frontend/EditOrderDialog.h
+    Frontend/BillDialog.h
+    Frontend/BillDialog.cpp
+    Frontend/EditOrderDialog.h
+    Frontend/EditOrderDialog.cpp
+
 )
 
 target_link_libraries(increment111
@@ -93,6 +116,7 @@ target_include_directories(increment111 PRIVATE
     Backend
     Backend/imageGenerator
     Backend/BarcodeReader
+    Backend/Category
     Backend/Product
     Frontend
     Backend/Encoder

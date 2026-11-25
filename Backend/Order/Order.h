@@ -6,7 +6,7 @@
 #include <vector>
 #include "Product.h"
 #include "Payment.h"
-#include "Bill.h"
+#include "../Billing/Bill3.h"
 
 struct OrderItem
 {

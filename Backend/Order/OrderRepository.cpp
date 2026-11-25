@@ -61,6 +61,52 @@ void OrderRepository::saveOrder(const Order& order) const
     saveAllOrders(all);
 }
 
+
+void OrderDetailRepository::replaceOrderDetails(const std::string& orderID, const std::vector<OrderItem>& items) const
+{
+    std::vector<std::string> preservedLines;
+    std::ifstream inFile(filePath.c_str());
+    if (inFile.is_open())
+    {
+        std::string line;
+        while (std::getline(inFile, line))
+        {
+            if (line.empty())
+                continue;
+            std::vector<std::string> fields;
+            if (RecordFormat::splitLine(line, fields) && fields.size() == 5 &&
+                RecordFormat::unescapeText(fields[0]) == orderID)
+            {
+                continue; // Drop old rows for this orderID
+            }
+            preservedLines.push_back(line);
+        }
+    }
+
+    std::ofstream outFile(filePath.c_str(), std::ios::trunc);
+    if (!outFile.is_open())
+        throw std::runtime_error("Could not open order detail file for rewriting: " + filePath);
+
+    for (const auto& oldLine : preservedLines)
+        outFile << oldLine << "\n";
+
+    for (const auto& item : items)
+    {
+        std::vector<std::string> fields = {
+            RecordFormat::escapeText(orderID),
+            RecordFormat::escapeText(item.product.productID),
+            RecordFormat::escapeText(item.product.barcode),
+            RecordFormat::escapeText(item.product.acronym),
+            std::to_string(item.quantity)
+        };
+        outFile << RecordFormat::joinFields(fields) << "\n";
+    }
+
+    if (!outFile.good())
+        throw std::runtime_error("Failed rewriting order details to: " + filePath);
+}
+
+
 void OrderRepository::saveAllOrders(const std::vector<Order>& orders) const
 {
     std::ofstream file(filePath.c_str(), std::ios::trunc);

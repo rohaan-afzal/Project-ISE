@@ -1,5 +1,5 @@
 #include "BillCalc3.h"
-#include "RecordFormat.h"
+#include "Record-Format.h"
 #include <cmath>
 #include <ctime>
 #include <stdexcept>

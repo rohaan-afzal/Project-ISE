@@ -7,7 +7,7 @@
 #include "Order.h"
 #include "OrderRepository.h"
 #include "ProductService.h"
-#include "BillCalc.h"
+#include "BillCalc3.h"
 
 class OrderService
 {
@@ -16,6 +16,7 @@ private:
     OrderRepository& orderRepository;
     OrderDetailRepository& detailRepository;
     BillService& billService;
+    const SeasonalDiscountService* seasonService;
     Order currentOrder;
 
     static std::string currentDateString();
@@ -24,12 +25,13 @@ private:
 
 public:
     OrderService(ProductService& prodService,
-        OrderRepository& orderRepo,
-        OrderDetailRepository& detailRepo,
-        BillService& billSvc);
+                 OrderRepository& orderRepo,
+                 OrderDetailRepository& detailRepo,
+                 BillService& billSvc,
+                 const SeasonalDiscountService* seasonSvc = nullptr);
 
     void startNewOrder(const std::string& customerName = "Walk-in Customer",
-        const std::string& customerPhone = "-");
+                       const std::string& customerPhone = "-");
     void setCustomerDetails(const std::string& customerName, const std::string& customerPhone);
 
     void addProductByBarcode(const std::string& barcode, int quantity = 1);
@@ -42,14 +44,26 @@ public:
     void resumeOrder(const std::string& orderID);
 
     Bill checkoutAndGenerateBill(const std::string& paymentMode,
-        double amountTendered,
-        const std::string& merchant = "");
+                                 double amountTendered,
+                                 const std::string& merchant = "",
+                                 double specialDiscountPercent = 0.0);
 
     const Order& getCurrentOrder() const { return currentOrder; }
     double getSubtotal() const;
     double getTotalTax() const;
     double getTotalDiscount() const;
-    double getTotalPayable() const;
+    double getActiveSeasonalPercent() const;
+    double getTotalPayable(double specialDiscountPercent = 0.0) const;
+
+
+    bool verifyManagerPin(const std::string& pin) const;
+    bool isOrderEditableWithin7Days(const Order& order, std::string& reasonOut) const;
+    std::vector<Order> getEditablePaidOrders() const;
+    Order getOrderWithDetails(const std::string& orderID) const;
+    Bill saveEditedPaidOrder(const std::string& orderID,
+                             const std::vector<OrderItem>& updatedItems,
+                             const std::string& managerPin,
+                             double specialDiscountPercent = 0.0);
 };
 
 #endif

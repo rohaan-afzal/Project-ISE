@@ -27,7 +27,10 @@
 #include <QDir>
 #include <QMessageBox>
 #include <QDialog>
-#include <QFrame>
+#include <QPropertyAnimation>
+#include <QEasingCurve>
+#include <QEnterEvent>
+#include <QResizeEvent>
 #include <stdexcept>
 #include <vector>
 
@@ -38,6 +41,279 @@ QString resolveSiblingDataPath(const QString& productFilePath, const QString& fi
     return info.dir().filePath(fileName);
 }
 }
+
+// ============================================================================
+// CatalogDrawer (Full-Height, Zero-Reflow Hover Right-Edge Sidebar)
+// ============================================================================
+
+CatalogDrawer::CatalogDrawer(QWidget* parent)
+    : QFrame(parent)
+{
+    setObjectName("CatalogDrawer");
+    setStyleSheet(R"(
+    /* ---------- Base ---------- */
+    QWidget            { background-color:#FBF6EE; color:#3B2F2A; font-size:13px; }
+    QLabel             { background:transparent; }
+
+    /* ---------- Your existing drawer (unchanged) ---------- */
+    QFrame#CatalogDrawer {
+        background-color:#FFFFFF;
+        border:2px solid #D97757;
+        border-right:none;
+        border-top-left-radius:12px;
+        border-bottom-left-radius:12px;
+    }
+    QLabel#DrawerHandle {
+        background-color:#D97757;
+        color:#FFFFFF;
+        font-weight:bold;
+        font-size:13px;
+        border-top-left-radius:9px;
+        border-bottom-left-radius:9px;
+        padding:4px;
+    }
+
+    /* ---------- Mirrored drawer for left-edge panels (e.g. SEASONS, TODAY) ---------- */
+    QFrame#LeftDrawer {
+        background-color:#FFFFFF;
+        border:2px solid #D97757;
+        border-left:none;
+        border-top-right-radius:12px;
+        border-bottom-right-radius:12px;
+    }
+    QLabel#LeftDrawerHandle {
+        background-color:#D97757;
+        color:#FFFFFF;
+        font-weight:bold;
+        font-size:13px;
+        border-top-right-radius:9px;
+        border-bottom-right-radius:9px;
+        padding:4px;
+    }
+
+    /* ---------- Cards (group boxes) ---------- */
+    QGroupBox {
+        background:#FFFFFF;
+        border:2px solid #F0CBBB;
+        border-radius:12px;
+        margin-top:16px;
+        padding:12px 8px 8px 8px;
+        font-weight:bold;
+    }
+    QGroupBox::title {
+        subcontrol-origin:margin;
+        left:14px;
+        padding:2px 12px;
+        background:#D97757;
+        color:#FFFFFF;
+        border-radius:8px;
+    }
+
+    /* ---------- Tabs as pills ---------- */
+    QTabWidget::pane   { border:none; }
+    QTabBar::tab {
+        background:transparent;
+        color:#3B2F2A;
+        padding:8px 20px;
+        margin:4px 3px;
+        border-radius:14px;
+    }
+    QTabBar::tab:hover    { background:#FBE3D8; }
+    QTabBar::tab:selected { background:#D97757; color:#FFFFFF; font-weight:bold; }
+
+    /* ---------- Buttons ---------- */
+    QPushButton {
+        background:#D97757; color:#FFFFFF;
+        border:2px solid #D97757; border-radius:10px;
+        padding:8px 14px; font-weight:600;
+    }
+    QPushButton:hover    { background:#C4623F; border-color:#C4623F; }
+    QPushButton:pressed  { background:#B35836; }
+    QPushButton:disabled { background:#E8E1D8; border-color:#E8E1D8; color:#A89F96; }
+
+    /* Secondary: setProperty("role","secondary") */
+    QPushButton[role="secondary"] {
+        background:#FFFFFF; color:#D97757; border:2px solid #D97757;
+    }
+    QPushButton[role="secondary"]:hover { background:#FBE3D8; }
+
+    /* Destructive: setProperty("role","danger") */
+    QPushButton[role="danger"] {
+        background:#FFFFFF; color:#B5524A; border:2px solid #D9A39E;
+    }
+    QPushButton[role="danger"]:hover { background:#F9E3E0; }
+
+    /* ---------- Inputs ---------- */
+    QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+        background:#FFFFFF;
+        border:1.5px solid #E6D8CC;
+        border-radius:10px;
+        padding:6px 10px;
+        selection-background-color:#D97757;
+    }
+    QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
+        border:2px solid #5B8F94;          /* calm teal focus ring */
+    }
+    QComboBox QAbstractItemView {
+        background:#FFFFFF; border:1px solid #F0CBBB;
+        selection-background-color:#FBE3D8; selection-color:#3B2F2A;
+    }
+
+    /* ---------- Tables ---------- */
+    QTableView, QTableWidget {
+        background:#FFFFFF;
+        alternate-background-color:#FDF9F3;
+        gridline-color:transparent;
+        border:1.5px solid #F0CBBB;
+        border-radius:12px;
+        selection-background-color:#FBE3D8;
+        selection-color:#3B2F2A;
+    }
+    QTableView::item, QTableWidget::item { padding:6px; border:none; }
+    QHeaderView::section {
+        background:#EFE6DA; color:#3B2F2A;
+        border:none; padding:10px 6px; font-weight:bold;
+    }
+
+    /* ---------- Hero total (Cashier) ---------- */
+    QLabel#HeroTotal {
+        background:#D97757; color:#FFFFFF;
+        border-radius:14px; padding:14px 20px;
+        font-size:26px; font-weight:bold;
+    }
+
+    /* ---------- KPI chips (Reports) ---------- */
+    QFrame#KpiCard {
+        background:#FFFFFF; border:2px solid #F0CBBB; border-radius:12px;
+    }
+    QLabel#KpiLabel { color:#8A7A70; font-size:11px; }
+    QLabel#KpiValue { color:#D97757; font-size:20px; font-weight:bold; }
+
+    /* ---------- Status pills (setProperty("status", ...)) ---------- */
+    QLabel[status="healthy"] { background:#E3EFE6; color:#4F7A5C; border-radius:10px; padding:2px 10px; }
+    QLabel[status="low"]     { background:#FBEBCB; color:#9A6B12; border-radius:10px; padding:2px 10px; }
+    QLabel[status="out"]     { background:#F6D9D5; color:#A8433B; border-radius:10px; padding:2px 10px; }
+
+    /* ---------- Scrollbars ---------- */
+    QScrollBar:vertical   { background:transparent; width:10px; margin:2px; }
+    QScrollBar::handle:vertical { background:#E8B9A5; border-radius:4px; min-height:30px; }
+    QScrollBar::handle:vertical:hover { background:#D97757; }
+    QScrollBar::add-line, QScrollBar::sub-line { height:0; width:0; }
+)");
+
+    QHBoxLayout* outer = new QHBoxLayout(this);
+    outer->setContentsMargins(0, 0, 0, 0);
+    outer->setSpacing(0);
+
+    // Full-height vertical edge bar
+    m_handleLabel = new QLabel("◀\n\nC\nA\nT\nA\nL\nO\nG", this);
+    m_handleLabel->setObjectName("DrawerHandle");
+    m_handleLabel->setFixedWidth(kHandleWidth);
+    m_handleLabel->setAlignment(Qt::AlignCenter);
+    m_handleLabel->setCursor(Qt::PointingHandCursor);
+    m_handleLabel->setToolTip("Hover to open Product Catalog & Inventory");
+    outer->addWidget(m_handleLabel);
+
+    // Fixed width prevents QTableWidget from recalculating columns mid-slide
+    m_bodyWidget = new QWidget(this);
+    m_bodyWidget->setFixedWidth(kPanelWidth);
+    QVBoxLayout* bodyLayout = new QVBoxLayout(m_bodyWidget);
+    bodyLayout->setContentsMargins(14, 12, 14, 12);
+    bodyLayout->setSpacing(8);
+
+    QHBoxLayout* headerRow = new QHBoxLayout();
+    QLabel* title = new QLabel("Product Catalog & Inventory (Data/Product.txt)", m_bodyWidget);
+    title->setStyleSheet("font-size: 15px; font-weight: bold; color: #141413;");
+    m_pinCheck = new QCheckBox("Pin Open", m_bodyWidget);
+    m_pinCheck->setToolTip("Keep catalog drawer open while editing or restocking");
+    headerRow->addWidget(title);
+    headerRow->addStretch();
+    headerRow->addWidget(m_pinCheck);
+    bodyLayout->addLayout(headerRow);
+
+    outer->addWidget(m_bodyWidget);
+
+    // Animate pos instead of geometry so zero layout reflows happen during slide
+    m_slideAnim = new QPropertyAnimation(this, "pos", this);
+    m_slideAnim->setDuration(85);
+    m_slideAnim->setEasingCurve(QEasingCurve::OutCubic);
+
+    connect(m_pinCheck, &QCheckBox::toggled, this, [this](bool pinned) {
+        if (!pinned && !underMouse())
+            setExpanded(false, true);
+    });
+}
+
+bool CatalogDrawer::isPinned() const
+{
+    return m_pinCheck && m_pinCheck->isChecked();
+}
+
+void CatalogDrawer::enterEvent(QEnterEvent* event)
+{
+    QFrame::enterEvent(event);
+    setExpanded(true, true);
+}
+
+void CatalogDrawer::leaveEvent(QEvent* event)
+{
+    QFrame::leaveEvent(event);
+    if (!isPinned())
+        setExpanded(false, true);
+}
+
+void CatalogDrawer::repositionInParent()
+{
+    if (!parentWidget())
+        return;
+
+    const int pw = parentWidget()->width();
+    const int ph = parentWidget()->height();
+    const int drawerH = qMax(360, ph - 24);
+    const int topY = (ph - drawerH) / 2;
+    const int fullW = qMin(kPanelWidth + kHandleWidth, pw - 20);
+    const int bodyW = fullW - kHandleWidth;
+
+    m_bodyWidget->setFixedWidth(bodyW);
+    setFixedSize(fullW, drawerH);
+
+    const int targetX = m_isExpanded ? (pw - fullW) : (pw - kHandleWidth);
+    m_handleLabel->setText(m_isExpanded ? "▶\n\nC\nA\nT\nA\nL\nO\nG" : "◀\n\nC\nA\nT\nA\nL\nO\nG");
+    move(targetX, topY);
+    raise();
+}
+
+void CatalogDrawer::setExpanded(bool expanded, bool animated)
+{
+    if (!parentWidget() || m_isExpanded == expanded)
+        return;
+
+    m_isExpanded = expanded;
+    const int pw = parentWidget()->width();
+    const int ph = parentWidget()->height();
+    const int drawerH = qMax(360, ph - 24);
+    const int topY = (ph - drawerH) / 2;
+    const int fullW = qMin(kPanelWidth + kHandleWidth, pw - 20);
+
+    const int targetX = expanded ? (pw - fullW) : (pw - kHandleWidth);
+    m_handleLabel->setText(expanded ? "▶\n\nC\nA\nT\nA\nL\nO\nG" : "◀\n\nC\nA\nT\nA\nL\nO\nG");
+    raise();
+
+    if (!animated)
+    {
+        move(targetX, topY);
+        return;
+    }
+
+    m_slideAnim->stop();
+    m_slideAnim->setStartValue(pos());
+    m_slideAnim->setEndValue(QPoint(targetX, topY));
+    m_slideAnim->start();
+}
+
+// ============================================================================
+// ManagerScreen
+// ============================================================================
 
 ManagerScreen::ManagerScreen(ProductService* productService,
                              const QString& productFilePath,
@@ -54,92 +330,51 @@ ManagerScreen::ManagerScreen(ProductService* productService,
     refreshSeasonsTable();
 }
 
+void ManagerScreen::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    if (m_catalogDrawer)
+        m_catalogDrawer->repositionInParent();
+}
+
 void ManagerScreen::setupUi()
 {
+    // Leave 56px right margin so the collapsed Catalog bar never covers widgets
     QHBoxLayout* rootLayout = new QHBoxLayout(this);
-    rootLayout->setSpacing(12);
+    rootLayout->setContentsMargins(14, 12, 56, 12);
+    rootLayout->setSpacing(16);
 
-    // ================= LEFT COLUMN: Category Config + Add/Edit Product =================
-    QVBoxLayout* leftColumn = new QVBoxLayout();
-    leftColumn->setSpacing(8);
-
-    // 1. Category Configuration Group (Req 1)
-    QGroupBox* catGroup = new QGroupBox("1. Product Categories (Data/PCategory.txt)", this);
-    QVBoxLayout* catLayout = new QVBoxLayout(catGroup);
-    catLayout->setSpacing(6);
-
-    QHBoxLayout* catFormRow = new QHBoxLayout();
-    m_catIdInput = new QLineEdit(this);
-    m_catIdInput->setPlaceholderText("ID (10-99)");
-    m_catIdInput->setMaxLength(2);
-    m_catIdInput->setMaximumWidth(80);
-    m_catIdInput->setMinimumHeight(26);
-    m_catIdInput->setValidator(
-        new QRegularExpressionValidator(QRegularExpression("[1-9][0-9]"), m_catIdInput));
-    m_catIdInput->setText(QString::fromStdString(m_categoryService.getNextCategoryID()));
-
-    m_catNameInput = new QLineEdit(this);
-    m_catNameInput->setPlaceholderText("Category Name");
-    m_catNameInput->setMinimumHeight(26);
-
-    m_catAcronymInput = new QLineEdit(this);
-    m_catAcronymInput->setPlaceholderText("Acronym");
-    m_catAcronymInput->setMaximumWidth(95);
-    m_catAcronymInput->setMinimumHeight(26);
-
-    m_addCategoryBtn = new QPushButton("Add Category", this);
-    m_addCategoryBtn->setMinimumHeight(26);
-
-    catFormRow->addWidget(m_catIdInput);
-    catFormRow->addWidget(m_catNameInput);
-    catFormRow->addWidget(m_catAcronymInput);
-    catFormRow->addWidget(m_addCategoryBtn);
-    catLayout->addLayout(catFormRow);
-
-    m_categoryTable = new QTableWidget(0, 3, this);
-    m_categoryTable->setHorizontalHeaderLabels(QStringList() << "Category ID" << "Category Name" << "Acronym");
-    m_categoryTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_categoryTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_categoryTable->verticalHeader()->setVisible(false);
-    m_categoryTable->verticalHeader()->setDefaultSectionSize(24);
-    m_categoryTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    m_categoryTable->setMinimumHeight(105);
-    m_categoryTable->setMaximumHeight(130);
-    catLayout->addWidget(m_categoryTable);
-
-    leftColumn->addWidget(catGroup);
-
-    // 2. Add / Edit Product + Barcode Generator Group
-    m_formGroup = new QGroupBox("2. Add New Product to Catalog", this);
+    // ================= LEFT COLUMN: Add / Edit Product & Barcode =================
+    m_formGroup = new QGroupBox("1. Add New Product to Catalog", this);
     QVBoxLayout* formGroupLayout = new QVBoxLayout(m_formGroup);
-    formGroupLayout->setSpacing(6);
+    formGroupLayout->setSpacing(8);
 
     QFormLayout* form = new QFormLayout();
-    form->setVerticalSpacing(5);
-    form->setHorizontalSpacing(10);
+    form->setVerticalSpacing(7);
+    form->setHorizontalSpacing(12);
     form->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
 
     m_categoryCombo = new QComboBox(this);
-    m_categoryCombo->setMinimumHeight(26);
+    m_categoryCombo->setMinimumHeight(28);
 
     m_idInput = new QLineEdit(this);
-    m_idInput->setMinimumHeight(26);
+    m_idInput->setMinimumHeight(28);
     m_idInput->setText(QString::fromStdString(m_productService->getNextProductID()));
 
     QHBoxLayout* barcodeFieldRow = new QHBoxLayout();
     barcodeFieldRow->setSpacing(6);
     m_barcodePrefixLabel = new QLineEdit(this);
     m_barcodePrefixLabel->setReadOnly(true);
-    m_barcodePrefixLabel->setFixedWidth(48);
-    m_barcodePrefixLabel->setMinimumHeight(26);
+    m_barcodePrefixLabel->setFixedWidth(50);
+    m_barcodePrefixLabel->setMinimumHeight(28);
     m_barcodePrefixLabel->setAlignment(Qt::AlignCenter);
-    m_barcodePrefixLabel->setStyleSheet("background-color: #e9ecef; font-weight: bold;");
+    m_barcodePrefixLabel->setStyleSheet("background-color: #E8E6DC; font-weight: bold;");
 
     m_barcodeSuffixInput = new QLineEdit(this);
     m_barcodeSuffixInput->setPlaceholderText("4 digits (e.g. 0001)");
     m_barcodeSuffixInput->setMaxLength(4);
-    m_barcodeSuffixInput->setMinimumHeight(26);
+    m_barcodeSuffixInput->setMinimumHeight(28);
     m_barcodeSuffixInput->setValidator(
         new QRegularExpressionValidator(QRegularExpression("[0-9]{0,4}"), m_barcodeSuffixInput));
 
@@ -148,40 +383,40 @@ void ManagerScreen::setupUi()
 
     m_acronymInput = new QLineEdit(this);
     m_acronymInput->setPlaceholderText("e.g. TEA");
-    m_acronymInput->setMinimumHeight(26);
+    m_acronymInput->setMinimumHeight(28);
 
     m_nameInput = new QLineEdit(this);
     m_nameInput->setPlaceholderText("e.g. GreenTea");
-    m_nameInput->setMinimumHeight(26);
+    m_nameInput->setMinimumHeight(28);
 
     m_unitCombo = new QComboBox(this);
-    m_unitCombo->setMinimumHeight(26);
+    m_unitCombo->setMinimumHeight(28);
     m_unitCombo->addItems(QStringList() << "Pack" << "Kg" << "Gram" << "Litre" << "ml" << "Piece" << "Box" << "Bottle" << "Dozen");
 
     m_priceSpin = new QDoubleSpinBox(this);
     m_priceSpin->setRange(0.0, 1000000.0);
     m_priceSpin->setDecimals(2);
     m_priceSpin->setPrefix("PKR ");
-    m_priceSpin->setMinimumHeight(26);
+    m_priceSpin->setMinimumHeight(28);
 
     m_taxSpin = new QDoubleSpinBox(this);
     m_taxSpin->setRange(0.0, 100000.0);
     m_taxSpin->setDecimals(2);
-    m_taxSpin->setMinimumHeight(26);
+    m_taxSpin->setMinimumHeight(28);
 
     m_discountSpin = new QDoubleSpinBox(this);
     m_discountSpin->setRange(0.0, 100000.0);
     m_discountSpin->setDecimals(2);
-    m_discountSpin->setMinimumHeight(26);
+    m_discountSpin->setMinimumHeight(28);
 
     m_quantitySpin = new QSpinBox(this);
     m_quantitySpin->setRange(0, 100000);
     m_quantitySpin->setValue(10);
-    m_quantitySpin->setMinimumHeight(26);
+    m_quantitySpin->setMinimumHeight(28);
 
     m_imagePathInput = new QLineEdit(this);
     m_imagePathInput->setPlaceholderText("Click Save Barcode PNG to record saved file path");
-    m_imagePathInput->setMinimumHeight(26);
+    m_imagePathInput->setMinimumHeight(28);
 
     form->addRow("Category:", m_categoryCombo);
     form->addRow("Product ID:", m_idInput);
@@ -198,9 +433,7 @@ void ManagerScreen::setupUi()
 
     QHBoxLayout* barcodeBtns = new QHBoxLayout();
     m_genBarcodeBtn = new QPushButton("Preview Barcode", this);
-    m_genBarcodeBtn->setMinimumHeight(28);
     m_saveBarcodeBtn = new QPushButton("Save Barcode PNG", this);
-    m_saveBarcodeBtn->setMinimumHeight(28);
     m_saveBarcodeBtn->setEnabled(false);
     barcodeBtns->addWidget(m_genBarcodeBtn);
     barcodeBtns->addWidget(m_saveBarcodeBtn);
@@ -208,104 +441,96 @@ void ManagerScreen::setupUi()
 
     m_barcodePreview = new QLabel("Barcode preview", this);
     m_barcodePreview->setAlignment(Qt::AlignCenter);
-    m_barcodePreview->setMinimumHeight(55);
-    m_barcodePreview->setMaximumHeight(65);
+    m_barcodePreview->setMinimumHeight(70);
+    m_barcodePreview->setMaximumHeight(85);
     m_barcodePreview->setFrameShape(QFrame::Box);
     formGroupLayout->addWidget(m_barcodePreview);
 
     QHBoxLayout* saveActionBtns = new QHBoxLayout();
     m_saveProductBtn = new QPushButton("Save Product to Catalog", this);
-    m_saveProductBtn->setMinimumHeight(30);
     m_cancelEditBtn = new QPushButton("Cancel Edit", this);
-    m_cancelEditBtn->setMinimumHeight(30);
     m_cancelEditBtn->setVisible(false);
     saveActionBtns->addWidget(m_saveProductBtn);
     saveActionBtns->addWidget(m_cancelEditBtn);
     formGroupLayout->addLayout(saveActionBtns);
 
-    m_statusLabel = new QLabel("Ready.", this);
+    m_statusLabel = new QLabel("Hover over the right-edge Catalog bar anytime to view, edit, or restock products.", this);
     m_statusLabel->setWordWrap(true);
     formGroupLayout->addWidget(m_statusLabel);
+    formGroupLayout->addStretch();
 
-    leftColumn->addWidget(m_formGroup, 1);
-    rootLayout->addLayout(leftColumn, 4);
+    rootLayout->addWidget(m_formGroup, 5);
 
-    // ================= RIGHT COLUMN: Catalog + Seasonal Discounts + Saved Bills PDF =================
+    // ================= RIGHT COLUMN: Categories + Seasonal Discounts =================
     QVBoxLayout* rightColumn = new QVBoxLayout();
-    rightColumn->setSpacing(8);
+    rightColumn->setSpacing(14);
 
-    QGroupBox* catalogGroup = new QGroupBox("3. Current Product Catalog & Inventory (Data/Product.txt)", this);
-    QVBoxLayout* rightLayout = new QVBoxLayout(catalogGroup);
+    // 2. Category Configuration Group
+    QGroupBox* catGroup = new QGroupBox("2. Product Categories (Data/PCategory.txt)", this);
+    QVBoxLayout* catLayout = new QVBoxLayout(catGroup);
+    catLayout->setSpacing(8);
 
-    m_productTable = new QTableWidget(0, 10, this);
-    m_productTable->setHorizontalHeaderLabels(
-        QStringList() << "ID" << "Cat ID" << "Barcode" << "Acronym" << "Name" << "Unit"
-                      << "Price" << "Tax" << "Discount" << "Stock");
-    m_productTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_productTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_productTable->setSelectionMode(QAbstractItemView::SingleSelection);
-    m_productTable->verticalHeader()->setVisible(false);
-    m_productTable->verticalHeader()->setDefaultSectionSize(25);
-    m_productTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    rightLayout->addWidget(m_productTable, 1);
+    QHBoxLayout* catFormRow = new QHBoxLayout();
+    m_catIdInput = new QLineEdit(this);
+    m_catIdInput->setPlaceholderText("ID (10-99)");
+    m_catIdInput->setMaxLength(2);
+    m_catIdInput->setMaximumWidth(85);
+    m_catIdInput->setValidator(
+        new QRegularExpressionValidator(QRegularExpression("[1-9][0-9]"), m_catIdInput));
+    m_catIdInput->setText(QString::fromStdString(m_categoryService.getNextCategoryID()));
 
-    QHBoxLayout* stockActionsRow = new QHBoxLayout();
-    m_editProductBtn = new QPushButton("Edit Selected", this);
-    m_editProductBtn->setMinimumHeight(28);
+    m_catNameInput = new QLineEdit(this);
+    m_catNameInput->setPlaceholderText("Category Name");
 
-    m_restockSpin = new QSpinBox(this);
-    m_restockSpin->setRange(1, 100000);
-    m_restockSpin->setValue(10);
-    m_restockSpin->setPrefix("+ Stock: ");
-    m_restockSpin->setMinimumHeight(28);
+    m_catAcronymInput = new QLineEdit(this);
+    m_catAcronymInput->setPlaceholderText("Acronym");
+    m_catAcronymInput->setMaximumWidth(100);
 
-    m_restockBtn = new QPushButton("Restock", this);
-    m_restockBtn->setMinimumHeight(28);
-    m_removeProductBtn = new QPushButton("Remove", this);
-    m_removeProductBtn->setMinimumHeight(28);
-    m_refreshBtn = new QPushButton("Refresh", this);
-    m_refreshBtn->setMinimumHeight(28);
+    m_addCategoryBtn = new QPushButton("Add Category", this);
 
-    stockActionsRow->addWidget(m_editProductBtn);
-    stockActionsRow->addWidget(m_restockSpin);
-    stockActionsRow->addWidget(m_restockBtn);
-    stockActionsRow->addWidget(m_removeProductBtn);
-    stockActionsRow->addWidget(m_refreshBtn);
-    rightLayout->addLayout(stockActionsRow);
+    catFormRow->addWidget(m_catIdInput);
+    catFormRow->addWidget(m_catNameInput, 1);
+    catFormRow->addWidget(m_catAcronymInput);
+    catFormRow->addWidget(m_addCategoryBtn);
+    catLayout->addLayout(catFormRow);
 
-    rightColumn->addWidget(catalogGroup, 3);
+    m_categoryTable = new QTableWidget(0, 3, this);
+    m_categoryTable->setHorizontalHeaderLabels(QStringList() << "Category ID" << "Category Name" << "Acronym");
+    m_categoryTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_categoryTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_categoryTable->verticalHeader()->setVisible(false);
+    m_categoryTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    catLayout->addWidget(m_categoryTable, 1);
 
-    // 4. Seasonal Discounts & Saved Bills PDF Group (Batch 2)
-    QGroupBox* seasonsGroup = new QGroupBox("4. Seasonal Discounts (Data/Seasons.txt) & Saved Bills PDF", this);
+    rightColumn->addWidget(catGroup, 1);
+
+    // 3. Seasonal Discounts & Saved Bills PDF Group
+    QGroupBox* seasonsGroup = new QGroupBox("3. Seasonal Discounts (Data/Seasons.txt) && Saved Bills PDF", this);
     QVBoxLayout* seasonsLayout = new QVBoxLayout(seasonsGroup);
-    seasonsLayout->setSpacing(6);
+    seasonsLayout->setSpacing(8);
 
     QHBoxLayout* seasonFormRow = new QHBoxLayout();
     m_seasonStartInput = new QLineEdit(this);
     m_seasonStartInput->setPlaceholderText("Start DD-MM-YYYY");
     m_seasonStartInput->setMaxLength(10);
-    m_seasonStartInput->setMinimumHeight(26);
 
     m_seasonEndInput = new QLineEdit(this);
     m_seasonEndInput->setPlaceholderText("End DD-MM-YYYY");
     m_seasonEndInput->setMaxLength(10);
-    m_seasonEndInput->setMinimumHeight(26);
 
     m_seasonPercentSpin = new QDoubleSpinBox(this);
     m_seasonPercentSpin->setRange(0.0, 100.0);
     m_seasonPercentSpin->setDecimals(2);
     m_seasonPercentSpin->setSuffix(" %");
     m_seasonPercentSpin->setValue(10.0);
-    m_seasonPercentSpin->setMinimumHeight(26);
 
     m_seasonActiveCheck = new QCheckBox("Active", this);
     m_seasonActiveCheck->setChecked(true);
 
     m_addSeasonBtn = new QPushButton("Add Season", this);
-    m_addSeasonBtn->setMinimumHeight(26);
 
-    seasonFormRow->addWidget(m_seasonStartInput);
-    seasonFormRow->addWidget(m_seasonEndInput);
+    seasonFormRow->addWidget(m_seasonStartInput, 1);
+    seasonFormRow->addWidget(m_seasonEndInput, 1);
     seasonFormRow->addWidget(m_seasonPercentSpin);
     seasonFormRow->addWidget(m_seasonActiveCheck);
     seasonFormRow->addWidget(m_addSeasonBtn);
@@ -318,25 +543,56 @@ void ManagerScreen::setupUi()
     m_seasonsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_seasonsTable->setSelectionMode(QAbstractItemView::SingleSelection);
     m_seasonsTable->verticalHeader()->setVisible(false);
-    m_seasonsTable->verticalHeader()->setDefaultSectionSize(24);
     m_seasonsTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    m_seasonsTable->setMinimumHeight(95);
-    m_seasonsTable->setMaximumHeight(125);
-    seasonsLayout->addWidget(m_seasonsTable);
+    seasonsLayout->addWidget(m_seasonsTable, 1);
 
     QHBoxLayout* seasonActionsRow = new QHBoxLayout();
-    m_toggleSeasonBtn = new QPushButton("Toggle Selected Season Active/Inactive", this);
-    m_toggleSeasonBtn->setMinimumHeight(28);
+    m_toggleSeasonBtn = new QPushButton("Toggle Selected Active/Inactive", this);
     m_viewBillsBtn = new QPushButton("View / Print Saved Bills (PDF)", this);
-    m_viewBillsBtn->setMinimumHeight(28);
     seasonActionsRow->addWidget(m_toggleSeasonBtn);
     seasonActionsRow->addStretch();
     seasonActionsRow->addWidget(m_viewBillsBtn);
     seasonsLayout->addLayout(seasonActionsRow);
 
-    rightColumn->addWidget(seasonsGroup, 2);
-    rootLayout->addLayout(rightColumn, 6);
+    rightColumn->addWidget(seasonsGroup, 1);
+    rootLayout->addLayout(rightColumn, 5);
 
+    // ================= FLOATING RIGHT-EDGE CATALOG DRAWER =================
+    m_catalogDrawer = new CatalogDrawer(this);
+    QVBoxLayout* drawerBody = qobject_cast<QVBoxLayout*>(m_catalogDrawer->contentContainer()->layout());
+
+    m_productTable = new QTableWidget(0, 10, m_catalogDrawer);
+    m_productTable->setHorizontalHeaderLabels(
+        QStringList() << "ID" << "Cat ID" << "Barcode" << "Acronym" << "Name" << "Unit"
+                      << "Price" << "Tax" << "Discount" << "Stock");
+    m_productTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_productTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_productTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_productTable->verticalHeader()->setVisible(false);
+    m_productTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    drawerBody->addWidget(m_productTable, 1);
+
+    QHBoxLayout* stockActionsRow = new QHBoxLayout();
+    m_editProductBtn = new QPushButton("Edit Selected", m_catalogDrawer);
+    m_restockSpin = new QSpinBox(m_catalogDrawer);
+    m_restockSpin->setRange(1, 100000);
+    m_restockSpin->setValue(10);
+    m_restockSpin->setPrefix("+ Stock: ");
+
+    m_restockBtn = new QPushButton("Restock", m_catalogDrawer);
+    m_removeProductBtn = new QPushButton("Remove", m_catalogDrawer);
+    m_refreshBtn = new QPushButton("Refresh", m_catalogDrawer);
+
+    stockActionsRow->addWidget(m_editProductBtn);
+    stockActionsRow->addWidget(m_restockSpin);
+    stockActionsRow->addWidget(m_restockBtn);
+    stockActionsRow->addWidget(m_removeProductBtn);
+    stockActionsRow->addWidget(m_refreshBtn);
+    drawerBody->addLayout(stockActionsRow);
+
+    m_catalogDrawer->repositionInParent();
+
+    // Signal connections
     connect(m_addCategoryBtn, &QPushButton::clicked, this, &ManagerScreen::onAddCategoryClicked);
     connect(m_categoryCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &ManagerScreen::onCategorySelectionChanged);
@@ -498,7 +754,7 @@ void ManagerScreen::onLoadSelectedForEditClicked()
     const QString productID = selectedCatalogProductID();
     if (productID.isEmpty())
     {
-        setStatusMessage("Select a product row in the catalog table to edit.", true);
+        setStatusMessage("Select a product row in the catalog drawer to edit.", true);
         return;
     }
 
@@ -510,7 +766,7 @@ void ManagerScreen::onLoadSelectedForEditClicked()
     }
 
     m_isEditingProduct = true;
-    m_formGroup->setTitle("2. Edit Product (ID: " + productID + ")");
+    m_formGroup->setTitle("1. Edit Product (ID: " + productID + ")");
     m_saveProductBtn->setText("Update Product");
     m_cancelEditBtn->setVisible(true);
 
@@ -539,6 +795,10 @@ void ManagerScreen::onLoadSelectedForEditClicked()
     m_quantitySpin->setValue(p.quantity);
     m_imagePathInput->setText(QString::fromStdString(p.barcodeImagePath));
 
+    // Tuck drawer back in if unpinned so the edit form is immediately visible
+    if (m_catalogDrawer && !m_catalogDrawer->isPinned())
+        m_catalogDrawer->setExpanded(false, true);
+
     setStatusMessage("Editing product " + QString::fromStdString(p.name) + ". Modify fields and click Update Product.");
 }
 
@@ -551,7 +811,7 @@ void ManagerScreen::onCancelEditClicked()
 void ManagerScreen::resetProductForm()
 {
     m_isEditingProduct = false;
-    m_formGroup->setTitle("2. Add New Product to Catalog");
+    m_formGroup->setTitle("1. Add New Product to Catalog");
     m_saveProductBtn->setText("Save Product to Catalog");
     m_cancelEditBtn->setVisible(false);
 
@@ -629,7 +889,7 @@ void ManagerScreen::onRestockClicked()
     const QString barcode = selectedCatalogBarcode();
     if (barcode.isEmpty())
     {
-        setStatusMessage("Select a product row in the catalog table first.", true);
+        setStatusMessage("Select a product row in the catalog drawer first.", true);
         return;
     }
 
@@ -650,7 +910,7 @@ void ManagerScreen::onRemoveProductClicked()
     const QString barcode = selectedCatalogBarcode();
     if (barcode.isEmpty())
     {
-        setStatusMessage("Select a product row in the catalog table to remove.", true);
+        setStatusMessage("Select a product row in the catalog drawer to remove.", true);
         return;
     }
 

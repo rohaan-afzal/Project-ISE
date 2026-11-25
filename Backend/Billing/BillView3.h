@@ -1,5 +1,5 @@
-#ifndef BILLVIEW_H
-#define BILLVIEW_H
+#ifndef BILLVIEW3_H
+#define BILLVIEW3_H
 
 #include <QWidget>
 #include <QString>

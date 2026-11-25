@@ -1,1 +1,4 @@
-1001 456841 TEA GreenTea Pack 566 6 6 14 # barcode_456841.png
+1003 10 101354 TRE HariChaye Dozen 14 0 0 10 #
+1004 10 104535 dss dscds Gram 10 5 4 21 #
+1005 10 108987 xcc dscsd Litre 614 8 6 9 C:/Users/Pccenter/Desktop/barcode_108987.png #
+1006 11 114546 Cookie Wehshi_Cooke Pack 550 70 20 10 C:/Users/Pccenter/Desktop/barcode_114546.png #

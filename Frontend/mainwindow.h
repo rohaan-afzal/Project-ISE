@@ -12,6 +12,7 @@ class QLineEdit;
 class QPushButton;
 class QLabel;
 class CashierScreen;
+class ReportsScreen;
 class ManagerScreen;
 class ProductService;
 class OrderRepository;
@@ -55,7 +56,7 @@ private:
     QTabWidget* m_tabs = nullptr;
     CashierScreen* m_cashierScreen = nullptr;
     ManagerScreen* m_managerScreen = nullptr;
-
+    ReportsScreen* m_reportsScreen = nullptr;
 
     QLineEdit* m_Input = nullptr;
     QPushButton* m_Generate = nullptr;

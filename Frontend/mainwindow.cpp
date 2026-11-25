@@ -10,6 +10,7 @@
 #include "../Backend/Billing/BillRepo3.h"
 #include "../Backend/Billing/BillCalc3.h"
 #include "../Backend/Billing/SeasonRepository.h"
+#include "../Frontend/ReportsScreen.h"
 
 #include <QTabWidget>
 #include <QLabel>
@@ -84,9 +85,11 @@ MainWindow::MainWindow(QWidget* parent)
 
     m_cashierScreen = new CashierScreen(m_productService.get(), m_orderService.get(), this);
     m_managerScreen = new ManagerScreen(m_productService.get(), productPath, this);
+    m_reportsScreen = new ReportsScreen(m_dataDirPath, this);
 
     m_tabs->addTab(m_cashierScreen, "Cashier POS");
     m_tabs->addTab(m_managerScreen, "Manager Catalog");
+    m_tabs->addTab(m_reportsScreen, "Reports");
     m_tabs->addTab(createGenerateTab(), "Generate");
 
     connect(m_tabs, &QTabWidget::currentChanged, this, &MainWindow::onTabChanged);
@@ -229,6 +232,9 @@ void MainWindow::onTabChanged(int index)
 
     if (m_tabs->widget(index) == m_managerScreen && m_managerScreen)
         m_managerScreen->refreshProductTable();
+
+    if (m_tabs->widget(index) == m_reportsScreen && m_reportsScreen)
+        m_reportsScreen->refreshAllReports();
 }
 
 QWidget* MainWindow::createGenerateTab()

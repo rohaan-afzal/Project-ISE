@@ -1,5 +1,5 @@
-#ifndef BILL_H
-#define BILL_H
+#ifndef BILL3_H
+#define BILL3_H
 
 #include <string>
 #include <vector>

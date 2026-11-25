@@ -27,7 +27,7 @@ private:
 
 public:
     explicit OrderDetailRepository(const std::string& path = "Data/OrderDetail.txt");
-
+    void replaceOrderDetails(const std::string& orderID, const std::vector<OrderItem>& items) const;
     void saveOrderDetails(const std::string& orderID, const std::vector<OrderItem>& items) const;
     std::vector<OrderItem> getDetailsForOrder(const std::string& orderID, const ProductService& productService) const;
 };
