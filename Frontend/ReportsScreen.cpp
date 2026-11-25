@@ -120,6 +120,8 @@ void ReportsScreen::setupUi()
     connect(m_exportSalesBtn, &QPushButton::clicked, this, &ReportsScreen::onExportSalesCsvClicked);
     connect(m_refreshInvBtn, &QPushButton::clicked, this, &ReportsScreen::onRefreshInventoryClicked);
     connect(m_exportInvBtn, &QPushButton::clicked, this, &ReportsScreen::onExportInventoryCsvClicked);
+    connect(m_startDateInput, &QLineEdit::textEdited, this, [this]() { m_filterDateCheck->setChecked(true); });
+    connect(m_endDateInput, &QLineEdit::textEdited, this, [this]() { m_filterDateCheck->setChecked(true); });
 }
 
 void ReportsScreen::refreshAllReports()
