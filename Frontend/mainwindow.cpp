@@ -7,8 +7,9 @@
 #include "../Backend/Product/ProductService.h"
 #include "../Backend/Order/OrderRepository.h"
 #include "../Backend/Order/OrderService.h"
-#include "../Backend/Billing/BillRepo.h"
-#include "../Backend/Billing/BillCalc.h"
+#include "../Backend/Billing/BillRepo3.h"
+#include "../Backend/Billing/BillCalc3.h"
+#include "../Backend/Billing/SeasonRepository.h"
 
 #include <QTabWidget>
 #include <QLabel>
@@ -61,14 +62,20 @@ MainWindow::MainWindow(QWidget* parent)
     const QString orderPath = dataDir.filePath("Order.txt");
     const QString orderDetailPath = dataDir.filePath("OrderDetail.txt");
     const QString billPath = dataDir.filePath("Bill.txt");
+    const QString billDetailPath = dataDir.filePath("BillDetail.txt");
+    const QString seasonsPath = dataDir.filePath("Seasons.txt");
 
     m_productService = std::make_unique<ProductService>(productPath.toStdString());
     m_orderRepository = std::make_unique<OrderRepository>(orderPath.toStdString());
     m_orderDetailRepository = std::make_unique<OrderDetailRepository>(orderDetailPath.toStdString());
     m_billRepository = std::make_unique<FileBillRepository>(billPath.toStdString());
-    m_billService = std::make_unique<BillService>(*m_billRepository);
+    m_billDetailRepository = std::make_unique<FileBillDetailRepository>(billDetailPath.toStdString());
+    m_seasonRepository = std::make_unique<FileSeasonRepository>(seasonsPath.toStdString());
+    m_seasonalDiscountService = std::make_unique<SeasonalDiscountService>(*m_seasonRepository);
+    m_billService = std::make_unique<BillService>(
+        *m_billRepository, *m_billDetailRepository, *m_seasonalDiscountService);
     m_orderService = std::make_unique<OrderService>(
-        *m_productService, *m_orderRepository, *m_orderDetailRepository, *m_billService);
+        *m_productService, *m_orderRepository, *m_orderDetailRepository, *m_billService, m_seasonalDiscountService.get());
 
     setWindowTitle("POS System - Checkout, Inventory & Barcode Generator");
     resize(1120, 720);
@@ -241,8 +248,8 @@ QWidget* MainWindow::createGenerateTab()
         new QRegularExpressionValidator(
             QRegularExpression("[1-9][0-9]{0,5}"),
             m_Input
-        )
-    );
+            )
+        );
 
     inputRow->addWidget(m_Input, 1);
 
@@ -289,8 +296,8 @@ void MainWindow::onGenerateClicked()
                 m_Preview->size(),
                 Qt::KeepAspectRatio,
                 Qt::SmoothTransformation
-            )
-        );
+                )
+            );
 
         m_saveBtn->setEnabled(true);
 
@@ -316,7 +323,7 @@ void MainWindow::onSaveClicked()
         "Save barcode image",
         "barcode_" + m_Input->text() + ".png",
         "PNG image (*.png)"
-    );
+        );
 
     if (path.isEmpty())
         return;

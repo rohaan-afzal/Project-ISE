@@ -3,17 +3,21 @@
 #define MANAGERSCREEN_H
 
 #include <QWidget>
-#include <QImage>
 #include <QString>
+#include <QImage>
+#include "../Backend/Category/CategoryService.h"
+#include "../Backend/Billing/SeasonRepository.h"
 
+class ProductService;
 class QLineEdit;
 class QComboBox;
 class QDoubleSpinBox;
 class QSpinBox;
+class QCheckBox;
 class QPushButton;
 class QLabel;
 class QTableWidget;
-class ProductService;
+class QGroupBox;
 
 class ManagerScreen : public QWidget
 {
@@ -21,51 +25,95 @@ class ManagerScreen : public QWidget
 
 public:
     explicit ManagerScreen(ProductService* productService,
-        const QString& productFilePath,
-        QWidget* parent = nullptr);
+                           const QString& productFilePath,
+                           QWidget* parent = nullptr);
 
 public slots:
     void refreshProductTable();
 
 private slots:
-    void onAddProductClicked();
+    // Category Management (Req 1)
+    void onAddCategoryClicked();
+    void refreshCategoryList();
+    void onCategorySelectionChanged(int index);
+
+    // Product Management
     void onGenerateBarcodeClicked();
     void onSaveBarcodeImageClicked();
+    void onSaveProductClicked();
+    void onLoadSelectedForEditClicked();
+    void onCancelEditClicked();
     void onRestockClicked();
     void onRemoveProductClicked();
 
+    // Seasonal Discounts & Bill PDF Viewer (Batch 2)
+    void refreshSeasonsTable();
+    void onAddSeasonClicked();
+    void onToggleSeasonActiveClicked();
+    void onOpenSavedBillsClicked();
+
 private:
-    ProductService* m_productService;
-    QString m_productFilePath;
-
-    QLineEdit* m_idInput;
-    QLineEdit* m_barcodeInput;
-    QLineEdit* m_acronymInput;
-    QLineEdit* m_nameInput;
-    QComboBox* m_unitCombo;
-    QDoubleSpinBox* m_priceSpin;
-    QDoubleSpinBox* m_taxSpin;
-    QDoubleSpinBox* m_discountSpin;
-    QSpinBox* m_quantitySpin;
-    QLineEdit* m_imagePathInput;
-
-    QPushButton* m_genBarcodeBtn;
-    QPushButton* m_saveBarcodeBtn;
-    QPushButton* m_addProductBtn;
-    QPushButton* m_refreshBtn;
-
-    QSpinBox* m_restockSpin;
-    QPushButton* m_restockBtn;
-    QPushButton* m_removeProductBtn;
-
-    QLabel* m_barcodePreview;
-    QLabel* m_statusLabel;
-    QTableWidget* m_productTable;
-    QImage m_generatedBarcodeImage;
-
     void setupUi();
     void setStatusMessage(const QString& text, bool isError = false);
     QString selectedCatalogBarcode() const;
+    QString selectedCatalogProductID() const;
+    void resetProductForm();
+
+    ProductService* m_productService;
+    QString m_productFilePath;
+    CategoryService m_categoryService;
+    FileSeasonRepository m_seasonRepository;
+    bool m_isEditingProduct = false;
+
+    // Category Configuration Controls
+    QLineEdit* m_catIdInput = nullptr;
+    QLineEdit* m_catNameInput = nullptr;
+    QLineEdit* m_catAcronymInput = nullptr;
+    QPushButton* m_addCategoryBtn = nullptr;
+    QTableWidget* m_categoryTable = nullptr;
+
+    // Product Form Controls
+    QGroupBox* m_formGroup = nullptr;
+    QComboBox* m_categoryCombo = nullptr;
+    QLineEdit* m_idInput = nullptr;
+    QLineEdit* m_barcodePrefixLabel = nullptr;
+    QLineEdit* m_barcodeSuffixInput = nullptr;
+    QLineEdit* m_acronymInput = nullptr;
+    QLineEdit* m_nameInput = nullptr;
+    QComboBox* m_unitCombo = nullptr;
+    QDoubleSpinBox* m_priceSpin = nullptr;
+    QDoubleSpinBox* m_taxSpin = nullptr;
+    QDoubleSpinBox* m_discountSpin = nullptr;
+    QSpinBox* m_quantitySpin = nullptr;
+    QLineEdit* m_imagePathInput = nullptr;
+
+    QPushButton* m_genBarcodeBtn = nullptr;
+    QPushButton* m_saveBarcodeBtn = nullptr;
+    QLabel* m_barcodePreview = nullptr;
+
+    QPushButton* m_saveProductBtn = nullptr;
+    QPushButton* m_cancelEditBtn = nullptr;
+    QLabel* m_statusLabel = nullptr;
+
+    // Catalog Controls
+    QTableWidget* m_productTable = nullptr;
+    QSpinBox* m_restockSpin = nullptr;
+    QPushButton* m_editProductBtn = nullptr;
+    QPushButton* m_restockBtn = nullptr;
+    QPushButton* m_removeProductBtn = nullptr;
+    QPushButton* m_refreshBtn = nullptr;
+
+    // Seasonal Discount & Saved Bills Controls
+    QLineEdit* m_seasonStartInput = nullptr;
+    QLineEdit* m_seasonEndInput = nullptr;
+    QDoubleSpinBox* m_seasonPercentSpin = nullptr;
+    QCheckBox* m_seasonActiveCheck = nullptr;
+    QPushButton* m_addSeasonBtn = nullptr;
+    QPushButton* m_toggleSeasonBtn = nullptr;
+    QPushButton* m_viewBillsBtn = nullptr;
+    QTableWidget* m_seasonsTable = nullptr;
+
+    QImage m_generatedBarcodeImage;
 };
 
 #endif

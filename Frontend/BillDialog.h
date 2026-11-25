@@ -3,7 +3,7 @@
 #define BILLDIALOG_H
 
 #include <QDialog>
-#include "../Backend/Billing/Bill.h"
+#include "../Backend/Billing/Bill3.h"
 #include "../Backend/Order/Payment.h"
 
 class BillView;
@@ -15,11 +15,15 @@ class BillDialog : public QDialog
 
 public:
     explicit BillDialog(const Bill& bill,
-        const Payment& payment = Payment(),
-        double amountTendered = 0.0,
-        QWidget* parent = nullptr);
+                        const Payment& payment = Payment(),
+                        double amountTendered = 0.0,
+                        QWidget* parent = nullptr);
+
+private slots:
+    void onExportPdfClicked();
 
 private:
+    Bill m_bill;
     BillView* m_billView;
     QLabel* m_paymentSummaryLabel;
 };

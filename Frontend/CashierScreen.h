@@ -39,6 +39,7 @@ private slots:
     void onHoldOrderClicked();
     void onResumeOrderClicked();
     void onPaymentModeChanged(const QString& mode);
+    void onSpecialDiscountChanged(double value);
     void onCheckoutClicked();
 
 private:
@@ -66,6 +67,8 @@ private:
     QLabel* m_subtotalLabel;
     QLabel* m_taxLabel;
     QLabel* m_discountLabel;
+    QLabel* m_seasonalLabel;
+    QDoubleSpinBox* m_specialDiscountSpin;
     QLabel* m_payableLabel;
 
     QComboBox* m_paymentModeCombo;
@@ -74,9 +77,12 @@ private:
     QPushButton* m_checkoutBtn;
     QLabel* m_statusLabel;
     ProductDescriptionView* m_descriptionView;
+    QPushButton* m_editPaidOrderBtn;
+    void onEditPaidOrderClicked();
 
     void setupUi();
     void refreshOrderTable();
+    void updateTotalsDisplay();
     void setStatusMessage(const QString& text, bool isError = false);
     QString selectedCartBarcode() const;
 };

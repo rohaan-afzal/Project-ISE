@@ -4,6 +4,8 @@
 #include "../Backend/Product/ProductService.h"
 #include "../Backend/Product/ProductDescriptionView.h"
 #include "../Backend/Order/OrderService.h"
+#include "../Backend/Billing/BillCalc3.h"
+#include "../Frontend/EditOrderDialog.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -24,8 +26,8 @@
 #include <stdexcept>
 
 CashierScreen::CashierScreen(ProductService* productService,
-    OrderService* orderService,
-    QWidget* parent)
+                             OrderService* orderService,
+                             QWidget* parent)
     : QWidget(parent),
     m_productService(productService),
     m_orderService(orderService)
@@ -135,8 +137,10 @@ void CashierScreen::setupUi()
     heldRow->addWidget(new QLabel("Held Orders:", this));
     m_heldOrdersCombo = new QComboBox(this);
     m_resumeBtn = new QPushButton("Resume Held Order", this);
+    m_editPaidOrderBtn = new QPushButton("Edit Paid Order (<=7d)", this);
     heldRow->addWidget(m_heldOrdersCombo, 1);
     heldRow->addWidget(m_resumeBtn);
+    heldRow->addWidget(m_editPaidOrderBtn);
     cartLayout->addLayout(heldRow);
 
     rightCol->addWidget(cartGroup, 2);
@@ -148,6 +152,15 @@ void CashierScreen::setupUi()
     m_subtotalLabel = new QLabel("PKR 0.00", this);
     m_taxLabel = new QLabel("PKR 0.00", this);
     m_discountLabel = new QLabel("PKR 0.00", this);
+    m_seasonalLabel = new QLabel("0.00%", this);
+
+    m_specialDiscountSpin = new QDoubleSpinBox(this);
+    m_specialDiscountSpin->setRange(0.0, 8.0);
+    m_specialDiscountSpin->setDecimals(2);
+    m_specialDiscountSpin->setSingleStep(0.5);
+    m_specialDiscountSpin->setSuffix(" %");
+    m_specialDiscountSpin->setToolTip("Special discount allowed up to 8.00%");
+
     m_payableLabel = new QLabel("PKR 0.00", this);
     QFont payFont = m_payableLabel->font();
     payFont.setBold(true);
@@ -156,7 +169,9 @@ void CashierScreen::setupUi()
 
     totalsForm->addRow("Subtotal:", m_subtotalLabel);
     totalsForm->addRow("Total Tax:", m_taxLabel);
-    totalsForm->addRow("Total Discount:", m_discountLabel);
+    totalsForm->addRow("Product Discount:", m_discountLabel);
+    totalsForm->addRow("Seasonal Discount:", m_seasonalLabel);
+    totalsForm->addRow("Special Disc (<=8%):", m_specialDiscountSpin);
     totalsForm->addRow("Total Payable:", m_payableLabel);
     checkoutSplit->addLayout(totalsForm, 1);
 
@@ -197,9 +212,17 @@ void CashierScreen::setupUi()
     connect(m_holdBtn, &QPushButton::clicked, this, &CashierScreen::onHoldOrderClicked);
     connect(m_resumeBtn, &QPushButton::clicked, this, &CashierScreen::onResumeOrderClicked);
     connect(m_paymentModeCombo, &QComboBox::currentTextChanged, this, &CashierScreen::onPaymentModeChanged);
+    connect(m_specialDiscountSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            this, &CashierScreen::onSpecialDiscountChanged);
     connect(m_checkoutBtn, &QPushButton::clicked, this, &CashierScreen::onCheckoutClicked);
+    connect(m_editPaidOrderBtn, &QPushButton::clicked, this, &CashierScreen::onEditPaidOrderClicked);
 
     onPaymentModeChanged(m_paymentModeCombo->currentText());
+}
+void CashierScreen::onEditPaidOrderClicked()
+{
+    EditOrderDialog dlg(m_orderService, m_productService, this);
+    dlg.exec();
 }
 
 void CashierScreen::stopCamera()
@@ -333,6 +356,7 @@ void CashierScreen::onClearOrderClicked()
     m_orderService->clearOrder();
     m_customerNameInput->clear();
     m_customerPhoneInput->clear();
+    m_specialDiscountSpin->setValue(0.0);
     refreshOrderTable();
     setStatusMessage("Order cleared.");
 }
@@ -342,8 +366,8 @@ void CashierScreen::onHoldOrderClicked()
     try
     {
         const QString custName = m_customerNameInput->text().trimmed().isEmpty()
-            ? "Walk"
-            : m_customerNameInput->text().trimmed();
+        ? "Walk"
+        : m_customerNameInput->text().trimmed();
         m_orderService->setCustomerDetails(
             custName.toStdString(),
             m_customerPhoneInput->text().trimmed().toStdString());
@@ -353,6 +377,7 @@ void CashierScreen::onHoldOrderClicked()
 
         m_customerNameInput->clear();
         m_customerPhoneInput->clear();
+        m_specialDiscountSpin->setValue(0.0);
         refreshOrderTable();
         refreshHeldOrders();
         setStatusMessage("Order " + QString::fromStdString(heldId) + " placed on hold.");
@@ -395,7 +420,7 @@ void CashierScreen::refreshHeldOrders()
     {
         const QString id = QString::fromStdString(ord.orderID);
         const QString label = id + " - " + QString::fromStdString(ord.customerName) +
-            " (" + QString::fromStdString(ord.time) + ")";
+                              " (" + QString::fromStdString(ord.time) + ")";
         m_heldOrdersCombo->addItem(label, id);
     }
 }
@@ -413,14 +438,19 @@ void CashierScreen::onPaymentModeChanged(const QString& mode)
     {
         m_merchantCombo->addItems(QStringList() << "HBL" << "Meezan Bank" << "Bank Alfalah" << "UBL" << "MCB" << "Allied Bank");
         m_merchantCombo->setEnabled(true);
-        m_tenderedSpin->setValue(m_orderService->getTotalPayable());
+        m_tenderedSpin->setValue(m_orderService->getTotalPayable(m_specialDiscountSpin->value()));
     }
     else
     {
         m_merchantCombo->addItems(QStringList() << "JazzCash" << "EasyPaisa" << "SadaPay" << "NayaPay");
         m_merchantCombo->setEnabled(true);
-        m_tenderedSpin->setValue(m_orderService->getTotalPayable());
+        m_tenderedSpin->setValue(m_orderService->getTotalPayable(m_specialDiscountSpin->value()));
     }
+}
+
+void CashierScreen::onSpecialDiscountChanged(double)
+{
+    updateTotalsDisplay();
 }
 
 void CashierScreen::onCheckoutClicked()
@@ -428,8 +458,8 @@ void CashierScreen::onCheckoutClicked()
     try
     {
         const QString custName = m_customerNameInput->text().trimmed().isEmpty()
-            ? "Walk"
-            : m_customerNameInput->text().trimmed();
+        ? "Walk"
+        : m_customerNameInput->text().trimmed();
         m_orderService->setCustomerDetails(
             custName.toStdString(),
             m_customerPhoneInput->text().trimmed().toStdString());
@@ -437,8 +467,9 @@ void CashierScreen::onCheckoutClicked()
         const std::string mode = m_paymentModeCombo->currentText().toStdString();
         const std::string merchant = m_merchantCombo->currentText().toStdString();
         const double tendered = m_tenderedSpin->value();
+        const double specialPct = m_specialDiscountSpin->value();
 
-        const Bill bill = m_orderService->checkoutAndGenerateBill(mode, tendered, merchant);
+        const Bill bill = m_orderService->checkoutAndGenerateBill(mode, tendered, merchant, specialPct);
         const Payment paymentSummary(bill.totalPayable, mode, merchant);
 
         BillDialog dialog(bill, paymentSummary, tendered, this);
@@ -446,6 +477,7 @@ void CashierScreen::onCheckoutClicked()
 
         m_customerNameInput->clear();
         m_customerPhoneInput->clear();
+        m_specialDiscountSpin->setValue(0.0);
         m_tenderedSpin->setValue(0.0);
         refreshOrderTable();
         refreshHeldOrders();
@@ -456,6 +488,22 @@ void CashierScreen::onCheckoutClicked()
         setStatusMessage(QString::fromUtf8(e.what()), true);
         QMessageBox::warning(this, "Checkout Error", QString::fromUtf8(e.what()));
     }
+}
+
+void CashierScreen::updateTotalsDisplay()
+{
+    const double specialPct = m_specialDiscountSpin->value();
+    const double seasonalPct = m_orderService->getActiveSeasonalPercent();
+    const double payable = m_orderService->getTotalPayable(specialPct);
+
+    m_subtotalLabel->setText("PKR " + QString::number(m_orderService->getSubtotal(), 'f', 2));
+    m_taxLabel->setText("PKR " + QString::number(m_orderService->getTotalTax(), 'f', 2));
+    m_discountLabel->setText("PKR " + QString::number(m_orderService->getTotalDiscount(), 'f', 2));
+    m_seasonalLabel->setText(QString::number(seasonalPct, 'f', 2) + "%");
+    m_payableLabel->setText("PKR " + QString::number(payable, 'f', 2));
+
+    if (m_paymentModeCombo->currentText() != "cash")
+        m_tenderedSpin->setValue(payable);
 }
 
 void CashierScreen::refreshOrderTable()
@@ -470,7 +518,7 @@ void CashierScreen::refreshOrderTable()
         m_cartTable->insertRow(row);
 
         const BillLine line(item.product, item.quantity);
-        const double lineTotal = PricingService::getLineTotal(line);
+        const double lineTotal = PricingService::getLineAmount(line);
 
         m_cartTable->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(item.product.barcode)));
         m_cartTable->setItem(row, 1, new QTableWidgetItem(QString::fromStdString(item.product.name)));
@@ -481,12 +529,5 @@ void CashierScreen::refreshOrderTable()
         m_cartTable->setItem(row, 6, new QTableWidgetItem("PKR " + QString::number(lineTotal, 'f', 2)));
     }
 
-    const double payable = m_orderService->getTotalPayable();
-    m_subtotalLabel->setText("PKR " + QString::number(m_orderService->getSubtotal(), 'f', 2));
-    m_taxLabel->setText("PKR " + QString::number(m_orderService->getTotalTax(), 'f', 2));
-    m_discountLabel->setText("PKR " + QString::number(m_orderService->getTotalDiscount(), 'f', 2));
-    m_payableLabel->setText("PKR " + QString::number(payable, 'f', 2));
-
-    if (m_paymentModeCombo->currentText() != "cash")
-        m_tenderedSpin->setValue(payable);
+    updateTotalsDisplay();
 }
