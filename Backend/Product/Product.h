@@ -7,6 +7,7 @@
 struct Product
 {
     std::string productID;
+    std::string categoryID;
     std::string barcode;
     std::string acronym;
     std::string name;

@@ -17,6 +17,7 @@ public:
 
     bool getProductByBarcode(const std::string& barcode, Product& product) const;
     bool getProductByID(const std::string& productID, Product& product) const;
+    bool updateProduct(const Product& product) const;
     bool addProduct(const Product& product) const;
     bool deductStock(const std::string& barcode, int soldQuantity) const;
     bool restockProduct(const std::string& barcode, int addedQuantity) const;
